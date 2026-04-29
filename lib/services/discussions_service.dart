@@ -2,22 +2,44 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/discussion_model.dart';
 import '../secrets.dart';
 
 class DiscussionsService {
   static const String _binId = Secrets.binId;
   static const String _masterKey = Secrets.masterKey;
-
-  // ✅ الرابط الصحيح لقراءة البيانات
   static const String _publicUrl = 'https://api.jsonbin.io/v3/b/$_binId/latest';
-
-  // ✅ الرابط الصحيح لكتابة/تحديث البيانات
   static const String _writeUrl = 'https://api.jsonbin.io/v3/b/$_binId';
 
-  Future<List<DiscussionModel>> getDiscussions() async {
+  // ✅ مفاتيح التخزين المحلي
+  static const String _cachedDiscussionsKey = 'cached_discussions';
+  static const String _lastUpdateKey = 'last_discussions_update';
+
+  // ✅ جلب المناقشات (مع التخزين المحلي)
+  Future<List<DiscussionModel>> getDiscussions(
+      {bool forceRefresh = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // ✅ لو مش forcRefresh، جرب تجيب من الكاش أولاً
+    if (!forceRefresh) {
+      final cachedData = prefs.getString(_cachedDiscussionsKey);
+      if (cachedData != null) {
+        print('📦 جلب المناقشات من التخزين المحلي');
+        final List<dynamic> decoded = jsonDecode(cachedData);
+        final discussions =
+            decoded.map((json) => DiscussionModel.fromMap(json)).toList();
+
+        // ✅ لو في نت، نحاول نجلب بيانات جديدة في الخلفية (silent update)
+        _fetchAndCacheInBackground();
+
+        return discussions;
+      }
+    }
+
+    // ✅ جلب من الإنترنت
     try {
-      print('🌐 جلب المناقشات...');
+      print('🌐 جلب المناقشات من الإنترنت...');
 
       final response = await http.get(
         Uri.parse(_publicUrl),
@@ -25,16 +47,13 @@ class DiscussionsService {
           'X-Master-Key': _masterKey,
           'Content-Type': 'application/json',
         },
-      );
+      ).timeout(const Duration(seconds: 10));
 
       print('📥 Status Code: ${response.statusCode}');
-      print(
-          '📥 Response Body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}...');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        // ✅ استخراج المناقشات من record
         List<dynamic> discussionsJson = [];
 
         if (data['record'] != null && data['record']['discussions'] != null) {
@@ -42,13 +61,13 @@ class DiscussionsService {
         } else if (data['discussions'] != null) {
           discussionsJson = data['discussions'];
         } else {
-          // لو مفيش مناقشات خالص، نبدأ بمصفوفة جديدة
           discussionsJson = [];
         }
 
-        print('✅ تم جلب ${discussionsJson.length} مناقشة');
+        print('✅ تم جلب ${discussionsJson.length} مناقشة من الإنترنت');
 
-        return discussionsJson.map((json) {
+        // ✅ تحويل البيانات
+        final discussions = discussionsJson.map((json) {
           return DiscussionModel(
             id: json['id']?.toString() ??
                 DateTime.now().millisecondsSinceEpoch.toString(),
@@ -61,20 +80,101 @@ class DiscussionsService {
             isFromUser: false,
           );
         }).toList();
+
+        // ✅ حفظ في التخزين المحلي
+        await _cacheDiscussions(discussions);
+
+        return discussions;
+      } else {
+        print('⚠️ خطأ في الاستجابة: ${response.statusCode}');
+        // ✅ لو فشل الجلب من النت، جرب الكاش
+        return _getCachedDiscussions();
       }
-      return [];
     } catch (e) {
-      print('❌ خطأ في الجلب: $e');
-      return [];
+      print('⚠️ فشل الاتصال بالإنترنت: $e');
+      // ✅ لو مفيش نت، جيب من الكاش
+      return _getCachedDiscussions();
     }
   }
 
+  // ✅ دالة لجلب البيانات من الكاش
+  Future<List<DiscussionModel>> _getCachedDiscussions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedData = prefs.getString(_cachedDiscussionsKey);
+
+    if (cachedData != null) {
+      print('📦 جلب من الكاش (بدون نت)');
+      final List<dynamic> decoded = jsonDecode(cachedData);
+      return decoded.map((json) => DiscussionModel.fromMap(json)).toList();
+    }
+
+    print('❌ لا توجد بيانات مخزنة محلياً');
+    return [];
+  }
+
+  // ✅ دالة لحفظ المناقشات في الكاش
+  Future<void> _cacheDiscussions(List<DiscussionModel> discussions) async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<Map<String, dynamic>> discussionsMap =
+        discussions.map((d) => d.toMap()).toList();
+    await prefs.setString(_cachedDiscussionsKey, jsonEncode(discussionsMap));
+    await prefs.setInt(_lastUpdateKey, DateTime.now().millisecondsSinceEpoch);
+    print('💾 تم حفظ ${discussions.length} مناقشة في التخزين المحلي');
+  }
+
+  // ✅ دالة لتحديث الكاش في الخلفية (silent update)
+  Future<void> _fetchAndCacheInBackground() async {
+    try {
+      print('🔄 تحديث الخلفي للمناقشات...');
+
+      final response = await http.get(
+        Uri.parse(_publicUrl),
+        headers: {
+          'X-Master-Key': _masterKey,
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        List<dynamic> discussionsJson = [];
+
+        if (data['record'] != null && data['record']['discussions'] != null) {
+          discussionsJson = data['record']['discussions'];
+        } else if (data['discussions'] != null) {
+          discussionsJson = data['discussions'];
+        }
+
+        final discussions = discussionsJson.map((json) {
+          return DiscussionModel(
+            id: json['id']?.toString() ??
+                DateTime.now().millisecondsSinceEpoch.toString(),
+            userName: json['userName']?.toString() ?? 'مستخدم',
+            userImage: json['userImage']?.toString() ?? 'assets/icon/icon.png',
+            content: json['content']?.toString() ?? '',
+            createdAt: json['createdAt'] != null
+                ? DateTime.tryParse(json['createdAt'].toString())
+                : DateTime.now(),
+            isFromUser: false,
+          );
+        }).toList();
+
+        await _cacheDiscussions(discussions);
+        print('✅ تحديث الخلفي ناجح - ${discussions.length} مناقشة');
+      }
+    } catch (e) {
+      print('⚠️ فشل التحديث الخلفي: $e');
+    }
+  }
+
+  // ✅ إضافة مناقشة جديدة (مع تحديث الكاش)
   Future<bool> addDiscussion(String userName, String content) async {
     try {
       print('📝 محاولة إضافة مناقشة جديدة...');
 
-      // 1️⃣ جلب المناقشات الحالية
-      final currentDiscussions = await getDiscussions();
+      // جلب المناقشات الحالية
+      final currentDiscussions = await getDiscussions(forceRefresh: true);
 
       List<Map<String, dynamic>> discussionsList =
           currentDiscussions.map((disc) {
@@ -88,7 +188,7 @@ class DiscussionsService {
         };
       }).toList();
 
-      // 2️⃣ إضافة المناقشة الجديدة
+      // إضافة المناقشة الجديدة
       final newDiscussion = {
         'id': 'disc_${DateTime.now().millisecondsSinceEpoch}',
         'userName': userName,
@@ -99,140 +199,49 @@ class DiscussionsService {
 
       discussionsList.insert(0, newDiscussion);
 
-      // 3️⃣ حفظ البيانات في JSONBin
-      final putResponse = await http.put(
-        Uri.parse(_writeUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': _masterKey,
-        },
-        body: jsonEncode({
-          'discussions': discussionsList,
-        }),
-      );
+      // حفظ في JSONBin
+      final putResponse = await http
+          .put(
+            Uri.parse(_writeUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Master-Key': _masterKey,
+            },
+            body: jsonEncode({
+              'discussions': discussionsList,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
       print('📤 حفظ - Status Code: ${putResponse.statusCode}');
-      print('📤 حفظ - Response: ${putResponse.body}');
 
-      return putResponse.statusCode == 200;
+      if (putResponse.statusCode == 200) {
+        // ✅ تحديث الكاش بعد الإضافة
+        final newDiscussions = await getDiscussions(forceRefresh: true);
+        await _cacheDiscussions(newDiscussions);
+        return true;
+      }
+
+      return false;
     } catch (e) {
       print('❌ خطأ في الإضافة: $e');
       return false;
     }
   }
 
-  // ✅ دالة الحذف المعدلة بالكامل
+  // ✅ حذف مناقشة (مع تحديث الكاش)
   Future<bool> deleteDiscussion(
       String discussionId, String currentUserName) async {
     try {
-      print('🗑️ ===== بدء عملية الحذف =====');
-      print('🗑️ ID المناقشة: $discussionId');
-      print('👤 المستخدم الحالي: $currentUserName');
+      print('🗑️ بدء عملية الحذف');
 
-      // 1️⃣ جلب البيانات الحالية من API
       final getResponse = await http.get(
         Uri.parse(_publicUrl),
         headers: {
           'X-Master-Key': _masterKey,
           'Content-Type': 'application/json',
         },
-      );
-
-      print('📥 جلب البيانات - Status: ${getResponse.statusCode}');
-
-      if (getResponse.statusCode != 200) {
-        print('❌ فشل جلب البيانات');
-        return false;
-      }
-
-      final data = jsonDecode(getResponse.body);
-
-      // 2️⃣ استخراج المناقشات
-      List<dynamic> discussions = [];
-
-      if (data['record'] != null && data['record']['discussions'] != null) {
-        discussions = List<dynamic>.from(data['record']['discussions']);
-      } else if (data['discussions'] != null) {
-        discussions = List<dynamic>.from(data['discussions']);
-      } else {
-        print('❌ لم يتم العثور على المناقشات');
-        return false;
-      }
-
-      print('📊 عدد المناقشات قبل الحذف: ${discussions.length}');
-
-      // 3️⃣ البحث عن المناقشة
-      int indexToRemove = -1;
-      String? discussionOwner;
-
-      for (int i = 0; i < discussions.length; i++) {
-        final disc = discussions[i];
-        if (disc['id'] == discussionId) {
-          indexToRemove = i;
-          discussionOwner = disc['userName'];
-          break;
-        }
-      }
-
-      if (indexToRemove == -1) {
-        print('❌ لم يتم العثور على المناقشة');
-        return false;
-      }
-
-      print('👤 صاحب المناقشة: $discussionOwner');
-      print('👤 المستخدم الحالي: $currentUserName');
-
-      // 4️⃣ التحقق من الصلاحية
-      if (discussionOwner != currentUserName) {
-        print('❌ لا صلاحية - المستخدم $currentUserName ليس صاحب المناقشة');
-        return false;
-      }
-
-      // 5️⃣ حذف المناقشة
-      discussions.removeAt(indexToRemove);
-      print('✅ تم الحذف - المتبقي: ${discussions.length} مناقشة');
-
-      // 6️⃣ حفظ البيانات
-      final putResponse = await http.put(
-        Uri.parse(_writeUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': _masterKey,
-        },
-        body: jsonEncode({'discussions': discussions}),
-      );
-
-      print('📤 حفظ بعد الحذف - Status: ${putResponse.statusCode}');
-      print('📤 حفظ بعد الحذف - Response: ${putResponse.body}');
-
-      if (putResponse.statusCode == 200) {
-        print('✅ تم حذف المناقشة بنجاح');
-        return true;
-      } else {
-        print('❌ فشل الحفظ: ${putResponse.body}');
-        return false;
-      }
-    } catch (e, stackTrace) {
-      print('❌ خطأ في الحذف: $e');
-      print('📚 تفاصيل: $stackTrace');
-      return false;
-    }
-  }
-
-  // ✅ دالة مساعدة لحذف أي مناقشة (للمؤسس)
-  Future<bool> deleteAnyDiscussion(String discussionId) async {
-    try {
-      print('🗑️ ===== بدء عملية حذف (للمؤسس) =====');
-      print('🗑️ ID المناقشة: $discussionId');
-
-      // جلب البيانات
-      final getResponse = await http.get(
-        Uri.parse(_publicUrl),
-        headers: {
-          'X-Master-Key': _masterKey,
-          'Content-Type': 'application/json',
-        },
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (getResponse.statusCode != 200) return false;
 
@@ -247,25 +256,114 @@ class DiscussionsService {
         return false;
       }
 
-      // حذف المناقشة
+      int indexToRemove = -1;
+      for (int i = 0; i < discussions.length; i++) {
+        if (discussions[i]['id'] == discussionId) {
+          if (discussions[i]['userName'] == currentUserName) {
+            indexToRemove = i;
+            break;
+          } else {
+            return false;
+          }
+        }
+      }
+
+      if (indexToRemove == -1) return false;
+
+      discussions.removeAt(indexToRemove);
+
+      final putResponse = await http
+          .put(
+            Uri.parse(_writeUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Master-Key': _masterKey,
+            },
+            body: jsonEncode({'discussions': discussions}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (putResponse.statusCode == 200) {
+        // ✅ تحديث الكاش بعد الحذف
+        final newDiscussions = await getDiscussions(forceRefresh: true);
+        await _cacheDiscussions(newDiscussions);
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      print('❌ خطأ في الحذف: $e');
+      return false;
+    }
+  }
+
+  // ✅ حذف أي مناقشة (للمؤسس) مع تحديث الكاش
+  Future<bool> deleteAnyDiscussion(String discussionId) async {
+    try {
+      final getResponse = await http.get(
+        Uri.parse(_publicUrl),
+        headers: {
+          'X-Master-Key': _masterKey,
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (getResponse.statusCode != 200) return false;
+
+      final data = jsonDecode(getResponse.body);
+      List<dynamic> discussions = [];
+
+      if (data['record'] != null && data['record']['discussions'] != null) {
+        discussions = List<dynamic>.from(data['record']['discussions']);
+      } else if (data['discussions'] != null) {
+        discussions = List<dynamic>.from(data['discussions']);
+      } else {
+        return false;
+      }
+
       discussions.removeWhere((disc) => disc['id'] == discussionId);
 
-      // حفظ البيانات
-      final putResponse = await http.put(
-        Uri.parse(_writeUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': _masterKey,
-        },
-        body: jsonEncode({'discussions': discussions}),
-      );
+      final putResponse = await http
+          .put(
+            Uri.parse(_writeUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Master-Key': _masterKey,
+            },
+            body: jsonEncode({'discussions': discussions}),
+          )
+          .timeout(const Duration(seconds: 15));
 
-      print('📤 حفظ بعد الحذف - Status: ${putResponse.statusCode}');
-      return putResponse.statusCode == 200;
+      if (putResponse.statusCode == 200) {
+        // ✅ تحديث الكاش بعد الحذف
+        final newDiscussions = await getDiscussions(forceRefresh: true);
+        await _cacheDiscussions(newDiscussions);
+        return true;
+      }
+
+      return false;
     } catch (e) {
       print('❌ خطأ في حذف المؤسس: $e');
       return false;
     }
+  }
+
+  // ✅ دالة لمسح الكاش (ممكن تستخدمها في الإعدادات)
+  Future<void> clearCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_cachedDiscussionsKey);
+    await prefs.remove(_lastUpdateKey);
+    print('🗑️ تم مسح الكاش');
+  }
+
+  // ✅ دالة لمعرفة آخر تحديث
+  Future<DateTime?> getLastUpdateTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final timestamp = prefs.getInt(_lastUpdateKey);
+    if (timestamp != null) {
+      return DateTime.fromMillisecondsSinceEpoch(timestamp);
+    }
+    return null;
   }
 
   // دالة مساعدة للتحقق من الاتصال
@@ -276,11 +374,9 @@ class DiscussionsService {
         headers: {
           'X-Master-Key': _masterKey,
         },
-      );
-      print('🔍 اختبار الاتصال: ${response.statusCode}');
+      ).timeout(const Duration(seconds: 5));
       return response.statusCode == 200;
     } catch (e) {
-      print('❌ فشل الاتصال: $e');
       return false;
     }
   }
