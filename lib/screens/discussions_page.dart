@@ -22,7 +22,9 @@ class _DiscussionsPageState extends State<DiscussionsPage>
   bool _isRefreshing = false;
   bool _isAdding = false;
   String _currentUser = '';
-  bool _isFounder = false; // ✅ جديد: هل المستخدم هو المؤسس؟
+  bool _isFounder = false;
+  bool _isOnline = true;
+  DateTime? _lastUpdate;
   late AnimationController _animationController;
   late List<Animation<double>> _fadeAnimations;
   late List<Animation<Offset>> _slideAnimations;
@@ -33,6 +35,7 @@ class _DiscussionsPageState extends State<DiscussionsPage>
     super.initState();
     _loadCurrentUser();
     _loadDiscussions();
+    _checkConnection();
     _setupAnimations();
   }
 
@@ -41,7 +44,7 @@ class _DiscussionsPageState extends State<DiscussionsPage>
     if (mounted) {
       setState(() {
         _currentUser = prefs.getString('userName') ?? 'مستخدم';
-        _isFounder = prefs.getBool('isFounder') ?? false; // ✅ جلب حالة المؤسس
+        _isFounder = prefs.getBool('isFounder') ?? false;
       });
       print('👤 المستخدم الحالي: $_currentUser');
       print('👑 هل هو مؤسس؟ $_isFounder');
@@ -82,6 +85,15 @@ class _DiscussionsPageState extends State<DiscussionsPage>
     _animationController.forward();
   }
 
+  Future<void> _checkConnection() async {
+    final isOnline = await _discussionsService.testConnection();
+    if (mounted) {
+      setState(() {
+        _isOnline = isOnline;
+      });
+    }
+  }
+
   Future<void> _loadDiscussions() async {
     if (!mounted) return;
 
@@ -90,13 +102,18 @@ class _DiscussionsPageState extends State<DiscussionsPage>
     });
 
     try {
-      final discussions = await _discussionsService.getDiscussions();
+      final discussions =
+          await _discussionsService.getDiscussions(forceRefresh: false);
+      final lastUpdate = await _discussionsService.getLastUpdateTime();
 
       if (mounted) {
         setState(() {
           _discussions = discussions;
           _isLoading = false;
+          _lastUpdate = lastUpdate;
         });
+
+        await _checkConnection();
 
         if (_discussions.isNotEmpty) {
           _startAnimations(_discussions.length);
@@ -108,7 +125,13 @@ class _DiscussionsPageState extends State<DiscussionsPage>
         setState(() {
           _isLoading = false;
         });
-        _showErrorSnackBar('فشل تحميل المناقشات');
+
+        if (!_isOnline) {
+          _showErrorSnackBar(
+              'لا يوجد اتصال بالإنترنت، يتم عرض البيانات المخزنة');
+        } else {
+          _showErrorSnackBar('فشل تحميل المناقشات');
+        }
       }
     }
   }
@@ -121,17 +144,29 @@ class _DiscussionsPageState extends State<DiscussionsPage>
     });
 
     try {
-      final discussions = await _discussionsService.getDiscussions();
+      final discussions =
+          await _discussionsService.getDiscussions(forceRefresh: true);
+      final lastUpdate = await _discussionsService.getLastUpdateTime();
+      final isOnline = await _discussionsService.testConnection();
 
       if (mounted) {
         setState(() {
           _discussions = discussions;
           _isRefreshing = false;
+          _isOnline = isOnline;
+          _lastUpdate = lastUpdate;
         });
 
         _animationController.reset();
         if (_discussions.isNotEmpty) {
           _startAnimations(_discussions.length);
+        }
+
+        if (isOnline) {
+          _showSuccessSnackBar('تم تحديث المناقشات');
+        } else {
+          _showErrorSnackBar(
+              'لا يوجد اتصال بالإنترنت، يتم عرض البيانات المخزنة');
         }
       }
     } catch (e) {
@@ -354,7 +389,6 @@ class _DiscussionsPageState extends State<DiscussionsPage>
   }
 
   void _showDeleteConfirmation(DiscussionModel discussion) {
-    // ✅ المؤسس يقدر يحذف أي مناقشة، المستخدم العادي يحذف مناقشاته بس
     final bool canDelete = _isFounder || (discussion.userName == _currentUser);
 
     if (!canDelete) {
@@ -386,10 +420,8 @@ class _DiscussionsPageState extends State<DiscussionsPage>
           ),
           TextButton(
             onPressed: () async {
-              // ✅ إغلاق ديالوج التأكيد
               Navigator.pop(dialogContext);
 
-              // ✅ إظهار مؤقت التحميل
               showDialog(
                 context: context,
                 barrierDismissible: false,
@@ -402,12 +434,10 @@ class _DiscussionsPageState extends State<DiscussionsPage>
                 bool success;
 
                 if (_isFounder) {
-                  // ✅ المؤسس: يستخدم deleteAnyDiscussion
                   print('👑 حذف بواسطة المؤسس');
                   success = await _discussionsService
                       .deleteAnyDiscussion(discussion.id);
                 } else {
-                  // ✅ المستخدم العادي: يستخدم deleteDiscussion العادية
                   print('👤 حذف بواسطة مستخدم عادي');
                   success = await _discussionsService.deleteDiscussion(
                     discussion.id,
@@ -417,11 +447,9 @@ class _DiscussionsPageState extends State<DiscussionsPage>
 
                 print('✅ نتيجة الحذف: $success');
 
-                // ✅ إغلاق مؤقت التحميل
                 if (mounted) Navigator.pop(context);
 
                 if (success) {
-                  // ✅ إعادة تحميل البيانات
                   await _refresh();
                   if (mounted) {
                     _showSuccessSnackBar('تم حذف المناقشة بنجاح');
@@ -458,6 +486,21 @@ class _DiscussionsPageState extends State<DiscussionsPage>
     if (difference.inDays > 7) {
       return '${date.day}/${date.month}/${date.year}';
     } else if (difference.inDays > 0) {
+      return 'منذ ${difference.inDays} يوم';
+    } else if (difference.inHours > 0) {
+      return 'منذ ${difference.inHours} ساعة';
+    } else if (difference.inMinutes > 0) {
+      return 'منذ ${difference.inMinutes} دقيقة';
+    } else {
+      return 'الآن';
+    }
+  }
+
+  String _formatTimeAgo(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays > 0) {
       return 'منذ ${difference.inDays} يوم';
     } else if (difference.inHours > 0) {
       return 'منذ ${difference.inHours} ساعة';
@@ -530,12 +573,36 @@ class _DiscussionsPageState extends State<DiscussionsPage>
                 ),
               ),
               actions: [
-                // ✅ إظهار شارة المؤسس في الـ AppBar
+                // ✅ مؤشر حالة الاتصال
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  child: Tooltip(
+                    message: _isOnline
+                        ? 'متصل بالإنترنت${_lastUpdate != null ? " - آخر تحديث: ${_formatTimeAgo(_lastUpdate!)}" : ""}'
+                        : 'غير متصل - يعرض البيانات المخزنة',
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _isOnline
+                            ? const Color(0xFF4ADE80).withOpacity(0.15)
+                            : Colors.orange.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        _isOnline ? Icons.wifi_rounded : Icons.wifi_off_rounded,
+                        color:
+                            _isOnline ? const Color(0xFF4ADE80) : Colors.orange,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+                // ✅ شارة المؤسس
                 if (_isFounder)
                   Container(
-                    margin: const EdgeInsets.only(right: 8),
+                    margin: const EdgeInsets.only(right: 4),
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFF4ADE80).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(20),
@@ -664,7 +731,6 @@ class _DiscussionsPageState extends State<DiscussionsPage>
       itemCount: _discussions.length,
       itemBuilder: (context, index) {
         final discussion = _discussions[index];
-        // ✅ المستخدم العادي يشوف زر الحذف لمناقشاته بس، المؤسس يشوفه على كل المناقشات
         final bool canDelete =
             _isFounder || (discussion.userName == _currentUser);
 
@@ -778,7 +844,7 @@ class _DiscussionsPageState extends State<DiscussionsPage>
                       ),
                     ),
 
-                    // ✅ زر الحذف - يظهر للمؤسس أو لصاحب المناقشة
+                    // زر الحذف
                     if (canDelete)
                       GestureDetector(
                         onTap: () => _showDeleteConfirmation(discussion),
