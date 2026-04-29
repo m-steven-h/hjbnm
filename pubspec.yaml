@@ -1,0 +1,44 @@
+name: prayer_minute
+description: A prayer application for daily spiritual growth
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.2.1
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.2
+  shared_preferences: ^2.2.3
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.2
+  audioplayers: ^6.0.0
+  video_player: ^2.8.6
+  chewie: ^1.7.5
+  share_plus: ^10.0.0
+  wakelock_plus: ^1.1.4
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.2
+  flutter_launcher_icons: ^0.13.1
+  
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/sounds/
+    - assets/icon/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/icon.png"
+  remove_alpha_ios: true
+  adaptive_icon_padding: false
+  min_sdk_android: 21

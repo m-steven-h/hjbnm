@@ -1,0 +1,83 @@
+workflows:
+  build-apk:
+    name: Build APK
+
+    environment:
+      java: 17
+      flutter: stable
+
+    scripts:
+      - name: Fix gradlew permission
+        script: chmod +x android/gradlew
+
+      - name: Setup local.properties
+        script: echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
+
+      - name: Fix AndroidManifest.xml (add exported)
+        script: |
+          sed -i '' 's/<receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"\/>/<receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" android:exported="true"\/>/g' android/app/src/main/AndroidManifest.xml
+          
+          sed -i '' 's/<receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">/<receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver" android:exported="true">/g' android/app/src/main/AndroidManifest.xml
+
+      - name: Update build.gradle.kts
+        script: |
+          cat > android/app/build.gradle.kts << 'EOF'
+          plugins {
+              id("com.android.application")
+              id("kotlin-android")
+              id("dev.flutter.flutter-gradle-plugin")
+          }
+
+          android {
+              namespace = "com.example.prayer_minute"
+              compileSdk = 36
+              ndkVersion = flutter.ndkVersion
+
+              compileOptions {
+                  isCoreLibraryDesugaringEnabled = true
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = JavaVersion.VERSION_17.toString()
+              }
+
+              defaultConfig {
+                  applicationId = "com.example.prayer_minute"
+                  minSdk = flutter.minSdkVersion
+                  targetSdk = 36
+                  versionCode = flutter.versionCode
+                  versionName = flutter.versionName
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.getByName("debug")
+                  }
+              }
+          }
+
+          flutter {
+              source = "../.."
+          }
+
+          dependencies {
+              coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+          }
+          EOF
+
+      # 👇 الخطوة المهمة اللي كانت ناقصة
+      - name: Generate App Icons
+        script: |
+          flutter pub get
+          flutter pub run flutter_launcher_icons
+
+      - name: Build APK
+        script: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release
+
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
