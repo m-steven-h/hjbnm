@@ -4,5 +4,5 @@
   static const String masterKey =
       r'$2a$10$1ZM/KLcdAXwPAfmlUNBKXOasdDe/oFLHfebege3oreyvWht7AUhLS';
 
-  static const String founderSecretCode = 'm steven h';
+  static const String founderSecretCode = '2011';
 }
