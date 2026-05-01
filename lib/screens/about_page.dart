@@ -12,7 +12,7 @@ class AboutPage extends StatelessWidget {
   Future<void> _launchEmail() async {
     final Uri emailUri = Uri(
       scheme: 'mailto',
-      path: 'support@dakikatsalah.com',
+      path: 'steven.hany.194@gmail.com',
       query: 'subject=استفسار عن تطبيق دقيقة صلاة',
     );
     try {
@@ -173,7 +173,7 @@ class AboutPage extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              'الإصدار 2.0.0',
+              'الإصدار 1.0.0',
               style: GoogleFonts.cairo(
                 fontSize: 14 * provider.fontScale,
                 color: Colors.white,
@@ -228,7 +228,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            '🎯 رؤيتنا',
+            'رؤيتنا',
             style: GoogleFonts.cairo(
               fontSize: 18 * provider.fontScale,
               fontWeight: FontWeight.bold,
@@ -246,7 +246,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            '💚 رسالتنا',
+            'رسالتنا',
             style: GoogleFonts.cairo(
               fontSize: 18 * provider.fontScale,
               fontWeight: FontWeight.bold,
@@ -310,7 +310,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            'بدأت فكرة "دقيقة صلاة" في عام 2024، من رغبة عميقة في مساعدة المسيحيين على الالتزام بحياة الصلاة اليومية وسط انشغالات الحياة العصرية.',
+            'بدأت فكرة "دقيقة صلاة" في عام 2026 من رغبة عميقة في مساعدة المسيحيين على الالتزام بحياة الصلاة اليومية وسط انشغالات الحياة العصرية.',
             style: GoogleFonts.cairo(
               fontSize: 16 * provider.fontScale,
               color: provider.textColor,
@@ -484,7 +484,7 @@ class AboutPage extends StatelessWidget {
           const SizedBox(height: 20),
           _buildContentItem(
             provider,
-            '📖 الأجبية المقدسة',
+            'الأجبية المقدسة',
             'نصوص صلوات السبع ساعات كاملة: باكر، الثالثة، السادسة، التاسعة، الغروب، النوم، بالإضافة إلى صلوات منتصف الليل.'
                 'محتوياتها: المزامير، الإنجيل، القطَع، التحاليل، قانون الإيمان، التسبحة.'
                 'كل صلاة مرتبة في أقسام سهلة التصفح بكبسة زر واحدة.',
@@ -492,7 +492,7 @@ class AboutPage extends StatelessWidget {
           const SizedBox(height: 16),
           _buildContentItem(
             provider,
-            '🛤️ طريق الصلاة',
+            'طريق الصلاة',
             'رحلة روحانية مدتها 60 يوماً تساعدك على بناء حياة صلاة منتظمة.'
                 'كل يوم يحتوي على: آية من الكتاب المقدس + صلاة خاصة + تأمل + تشجيع روحي.'
                 'نظام متقدم يتيح فتح الأيام تلقائياً - يوم جديد يفتح كل يوم الساعة 1 ظهراً بعد إكمال اليوم السابق.'
@@ -501,7 +501,7 @@ class AboutPage extends StatelessWidget {
           const SizedBox(height: 16),
           _buildContentItem(
             provider,
-            '💚 كلمة منفعة',
+            'كلمة منفعة',
             'أكثر من 200 كلمة روحية تغطي موضوعات: الهدوء، الصلاة، الصوم، التوبة، المحبة، التواضع، الغضب، العناد، الحكمة، وغيرها الكثير.'
                 'كل كلمة هي مقال روحي عميق مستوحى من تعاليم الآباء والكتاب المقدس.'
                 'يمكنك مشاركة الكلمات مع أصدقائك عبر وسائل التواصل الاجتماعي.',
@@ -509,14 +509,14 @@ class AboutPage extends StatelessWidget {
           const SizedBox(height: 16),
           _buildContentItem(
             provider,
-            '🙏 صلوات قصيرة',
+            'صلوات قصيرة',
             'تشمل: صلاة الصباح، صلاة المساء، صلاة الطلبة، صلاة قبل الطعام وبعده، صلاة الاعتراف بالخطية، قانون الإيمان، وغيرها من الصلوات اليومية.'
                 'نصوص من تراث الكنيسة القبطية الأرثوذكسية.',
           ),
           const SizedBox(height: 16),
           _buildContentItem(
             provider,
-            '❓ لحظة فهم',
+            'لحظة فهم',
             'مجتمع أسئلة وأجوبة داخل التطبيق.'
                 'يمكنك طرح أسئلتك الروحية، والإجابة على أسئلة الآخرين.'
                 'نظام إعجاب وردود وتفاعل كامل.'
