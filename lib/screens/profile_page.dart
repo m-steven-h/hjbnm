@@ -21,11 +21,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // ✅ قائمة بأسماء المؤسسين
   static const List<String> _founderNames = [
-    'مؤسس التطبيق',
-    'Admin',
-    'admin',
-    'المؤسس',
-    'مدير التطبيق',
+    'm steven h',
   ];
 
   @override
