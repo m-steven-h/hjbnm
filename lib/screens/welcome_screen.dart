@@ -33,11 +33,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   // ✅ قائمة بأسماء المؤسسين
   static const List<String> _founderNames = [
-    'مؤسس التطبيق',
-    'Admin',
-    'admin',
-    'المؤسس',
-    'مدير التطبيق',
+    'm steven h',
   ];
 
   // ✅ دالة لتوليد ID فريد للمستخدم
