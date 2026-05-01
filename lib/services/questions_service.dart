@@ -1,5 +1,3 @@
-// lib/services/questions_service.dart
-
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,7 +9,6 @@ class QuestionsService {
   static const String _masterKey = Secrets.masterKey;
   static const String _publicUrl = 'https://api.jsonbin.io/v3/b/$_binId/latest';
   static const String _writeUrl = 'https://api.jsonbin.io/v3/b/$_binId';
-
   static const String _cachedQuestionsKey = 'cached_questions';
 
   Future<List<QuestionModel>> getQuestions() async {
@@ -19,12 +16,11 @@ class QuestionsService {
     final String? cachedData = prefs.getString(_cachedQuestionsKey);
 
     if (cachedData != null) {
-      print('📦 جلب الأسئلة من الكاش');
       try {
         final List<dynamic> decoded = jsonDecode(cachedData);
         return decoded.map((json) => QuestionModel.fromMap(json)).toList();
       } catch (e) {
-        print('❌ خطأ في قراءة الكاش: $e');
+        print('خطأ في قراءة الكاش: $e');
       }
     }
     return await _fetchFromApi();
@@ -32,13 +28,10 @@ class QuestionsService {
 
   Future<List<QuestionModel>> _fetchFromApi() async {
     try {
-      print('🌐 جلب الأسئلة من API...');
       final response = await http.get(
         Uri.parse(_publicUrl),
         headers: {'X-Master-Key': _masterKey},
       ).timeout(const Duration(seconds: 15));
-
-      print('📥 GET Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
@@ -65,8 +58,6 @@ class QuestionsService {
           }
         }
 
-        print('📊 عدد الأسئلة المستلمة: ${questionsJson.length}');
-
         final List<QuestionModel> questions = [];
         for (final item in questionsJson) {
           if (item is Map<String, dynamic>) {
@@ -77,10 +68,8 @@ class QuestionsService {
         await _cacheQuestions(questions);
         return questions;
       }
-      print('❌ فشل GET: ${response.statusCode}');
       return [];
     } catch (e) {
-      print('❌ فشل الجلب: $e');
       return [];
     }
   }
@@ -90,27 +79,17 @@ class QuestionsService {
     final List<Map<String, dynamic>> list =
         questions.map((q) => q.toMap()).toList();
     await prefs.setString(_cachedQuestionsKey, jsonEncode(list));
-    print('💾 تم تخزين ${questions.length} سؤال في الكاش');
   }
 
   Future<bool> addQuestion(
       String userId, String userName, String title, String content) async {
     try {
-      print('========================================');
-      print('📝 بدء إضافة سؤال جديد');
-      print('👤 userId: $userId');
-      print('🏷️ title: $title');
-      print('========================================');
-
       final getResponse = await http.get(
         Uri.parse(_publicUrl),
         headers: {'X-Master-Key': _masterKey},
       ).timeout(const Duration(seconds: 15));
 
-      print('📥 GET Status: ${getResponse.statusCode}');
-
       if (getResponse.statusCode != 200) {
-        print('❌ فشل جلب البيانات الحالية');
         return false;
       }
 
@@ -135,8 +114,6 @@ class QuestionsService {
         }
       }
 
-      print('📊 عدد الأسئلة الحالي: ${questions.length}');
-
       final Map<String, dynamic> newQuestion = {
         'id': DateTime.now().millisecondsSinceEpoch.toString(),
         'userId': userId,
@@ -149,7 +126,6 @@ class QuestionsService {
       };
 
       questions.insert(0, newQuestion);
-      print('📊 عدد الأسئلة بعد الإضافة: ${questions.length}');
 
       final Map<String, dynamic> newData = {
         'questions': questions,
@@ -166,19 +142,14 @@ class QuestionsService {
           )
           .timeout(const Duration(seconds: 20));
 
-      print('📤 PUT Status: ${putResponse.statusCode}');
-
       if (putResponse.statusCode == 200 || putResponse.statusCode == 201) {
         final updatedQuestions = await _fetchFromApi();
         await _cacheQuestions(updatedQuestions);
-        print('✅ تم إضافة السؤال بنجاح');
         return true;
       }
 
-      print('❌ فشل الحفظ في JSONBin');
       return false;
     } catch (e) {
-      print('❌ استثناء في addQuestion: $e');
       return false;
     }
   }
@@ -186,8 +157,6 @@ class QuestionsService {
   Future<bool> addReply(
       String questionId, String userId, String userName, String content) async {
     try {
-      print('💬 بدء إضافة رد على السؤال: $questionId');
-
       final getResponse = await http.get(
         Uri.parse(_publicUrl),
         headers: {'X-Master-Key': _masterKey},
@@ -228,7 +197,6 @@ class QuestionsService {
       }
 
       if (questionIndex == -1) {
-        print('❌ لم يتم العثور على السؤال');
         return false;
       }
 
@@ -266,12 +234,10 @@ class QuestionsService {
       if (putResponse.statusCode == 200 || putResponse.statusCode == 201) {
         final updatedQuestions = await _fetchFromApi();
         await _cacheQuestions(updatedQuestions);
-        print('✅ تم إضافة الرد بنجاح');
         return true;
       }
       return false;
     } catch (e) {
-      print('❌ خطأ في addReply: $e');
       return false;
     }
   }
@@ -376,7 +342,6 @@ class QuestionsService {
       }
       return false;
     } catch (e) {
-      print('❌ خطأ في toggleLike: $e');
       return false;
     }
   }
@@ -384,8 +349,6 @@ class QuestionsService {
   Future<bool> deleteQuestion(
       String questionId, String currentUserId, bool isFounder) async {
     try {
-      print('🗑️ حذف سؤال: $questionId');
-
       final getResponse = await http.get(
         Uri.parse(_publicUrl),
         headers: {'X-Master-Key': _masterKey},
@@ -431,7 +394,6 @@ class QuestionsService {
       final String questionOwnerId = question['userId']?.toString() ?? '';
 
       if (!isFounder && questionOwnerId != currentUserId) {
-        print('❌ غير مصرح بالحذف');
         return false;
       }
 
@@ -455,12 +417,10 @@ class QuestionsService {
       if (putResponse.statusCode == 200 || putResponse.statusCode == 201) {
         final updatedQuestions = await _fetchFromApi();
         await _cacheQuestions(updatedQuestions);
-        print('✅ تم حذف السؤال');
         return true;
       }
       return false;
     } catch (e) {
-      print('❌ خطأ في deleteQuestion: $e');
       return false;
     }
   }
@@ -468,8 +428,6 @@ class QuestionsService {
   Future<bool> deleteReply(String questionId, String replyId,
       String currentUserId, bool isFounder) async {
     try {
-      print('🗑️ حذف رد: $replyId');
-
       final getResponse = await http.get(
         Uri.parse(_publicUrl),
         headers: {'X-Master-Key': _masterKey},
@@ -533,7 +491,6 @@ class QuestionsService {
       if (!isFounder &&
           replyOwnerId != currentUserId &&
           questionOwnerId != currentUserId) {
-        print('❌ غير مصرح بحذف الرد');
         return false;
       }
 
@@ -558,12 +515,10 @@ class QuestionsService {
       if (putResponse.statusCode == 200 || putResponse.statusCode == 201) {
         final updatedQuestions = await _fetchFromApi();
         await _cacheQuestions(updatedQuestions);
-        print('✅ تم حذف الرد');
         return true;
       }
       return false;
     } catch (e) {
-      print('❌ خطأ في deleteReply: $e');
       return false;
     }
   }
@@ -571,6 +526,5 @@ class QuestionsService {
   Future<void> clearCache() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_cachedQuestionsKey);
-    print('🗑️ تم مسح الكاش');
   }
 }
