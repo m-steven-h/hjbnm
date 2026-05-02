@@ -71,7 +71,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   Future<bool> _showSecretCodeDialog(BuildContext context) async {
     final completer = Completer<bool>();
-    _secretCodeController.clear();
+    final TextEditingController codeController = TextEditingController();
 
     showDialog(
       context: context,
@@ -101,7 +101,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    'كود المؤسس',
+                    'تأكيد صلاحية المؤسس',
                     style: GoogleFonts.cairo(
                       color: provider.textColor,
                       fontWeight: FontWeight.bold,
@@ -114,7 +114,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'هذا الاسم محجوز للمؤسس\nأدخل الكود السري للمتابعة',
+                    'لتصبح مؤسساً، تحتاج إلى إدخال الكود السري',
                     style: GoogleFonts.cairo(
                       fontSize: 14,
                       color: provider.secondaryTextColor,
@@ -131,8 +131,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       ),
                     ),
                     child: TextFormField(
-                      controller: _secretCodeController,
-                      textAlign: TextAlign.center,
+                      controller: codeController,
+                      textAlign: TextAlign.right,
                       textDirection: TextDirection.ltr,
                       obscureText: true,
                       style: GoogleFonts.cairo(
@@ -159,48 +159,73 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 ],
               ),
               actions: [
-                TextButton(
-                  onPressed: () {
-                    if (!completer.isCompleted) {
-                      completer.complete(false);
-                    }
-                    Navigator.pop(dialogContext);
-                  },
-                  child: Text(
-                    'إلغاء',
-                    style: GoogleFonts.cairo(
-                      color: Colors.grey,
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final bool isValid = (codeController.text.trim() ==
+                              Secrets.founderSecretCode);
+                          if (!completer.isCompleted) {
+                            completer.complete(isValid);
+                          }
+                          Navigator.pop(dialogContext);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4ADE80),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          'تأكيد',
+                          style: GoogleFonts.cairo(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final bool isValid = (_secretCodeController.text.trim() ==
-                        Secrets.founderSecretCode);
-                    if (!completer.isCompleted) {
-                      completer.complete(isValid);
-                    }
-                    Navigator.pop(dialogContext);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4ADE80),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () {
+                          if (!completer.isCompleted) {
+                            completer.complete(false);
+                          }
+                          Navigator.pop(dialogContext);
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text(
+                          'إلغاء',
+                          style: GoogleFonts.cairo(
+                            color: Colors.grey,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  child: const Text('تأكيد'),
+                  ],
                 ),
               ],
             ),
           );
         },
       ),
-    );
+    ).then((_) {
+      if (!completer.isCompleted) {
+        completer.complete(false);
+      }
+      codeController.dispose();
+    });
+
     return completer.future;
   }
 
-  // ✅ دالة اختيار التاريخ باستخدام CalendarDatePicker
   Future<void> _selectBirthday(BuildContext context) async {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
 
@@ -287,7 +312,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
       String? userId = prefs.getString('userId');
       if (userId == null) {
-        userId = _generateUserId();
+        userId = isFounder ? Secrets.founderId : _generateUserId();
         await prefs.setString('userId', userId);
       }
 
@@ -303,29 +328,20 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   Future<void> _saveBirthdayAndContinue() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('birthday', _selectedBirthday.toIso8601String());
-
-    // جدولة إشعار عيد الميلاد السنوي
     await _scheduleBirthdayNotification(_selectedBirthday);
-
     setState(() {
       _currentStep = 2;
     });
   }
 
   Future<void> _scheduleBirthdayNotification(DateTime birthday) async {
+    final prefs = await SharedPreferences.getInstance();
+    final userName = prefs.getString('userName') ?? 'مستخدم';
     final notificationService = NotificationService();
     await notificationService.initialize();
-
-    final now = DateTime.now();
-    DateTime nextBirthday = DateTime(now.year, birthday.month, birthday.day);
-
-    if (nextBirthday.isBefore(now)) {
-      nextBirthday = DateTime(now.year + 1, birthday.month, birthday.day);
-    }
-
     await notificationService.scheduleBirthdayNotification(
-      userName: _nameController.text.trim(),
-      birthdayDate: nextBirthday,
+      userName: userName,
+      birthdayDate: birthday,
     );
   }
 
@@ -339,7 +355,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isFirstTime', false);
 
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(seconds: 1));
 
     if (mounted) {
       Navigator.of(context).pushReplacement(
@@ -463,7 +479,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  // ==================== Step 2: تاريخ الميلاد (بدون تخطي) ====================
+  // ==================== Step 2: تاريخ الميلاد ====================
   Widget _buildBirthdayStep(ThemeProvider themeProvider) {
     return TweenAnimationBuilder(
       tween: Tween<double>(begin: 0.0, end: 1.0),
@@ -512,7 +528,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  // ==================== Step 3: الإعدادات (بدون دوائر) ====================
+  // ==================== Step 3: الإعدادات ====================
   Widget _buildSettingsStep(ThemeProvider themeProvider) {
     return TweenAnimationBuilder(
       tween: Tween<double>(begin: 0.0, end: 1.0),
@@ -549,7 +565,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       ),
                     ),
                     const SizedBox(height: 30),
-                    // خيارات المظهر
                     _buildSettingsCard(
                       themeProvider,
                       title: 'المظهر',
@@ -591,7 +606,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // خيارات حجم الخط
                     _buildSettingsCard(
                       themeProvider,
                       title: 'حجم الخط',
@@ -641,7 +655,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     ),
                     const SizedBox(height: 40),
                     _buildFinishButton(themeProvider),
-                    const SizedBox(height: 20), // مسافة إضافية في الأسفل
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -941,7 +955,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  // خيارات المظهر (بدون دوائر)
   Widget _buildThemeOption(ThemeProvider themeProvider,
       {required String title,
       required IconData icon,
@@ -1005,13 +1018,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
-  // خيارات حجم الخط (بدون دوائر)
   Widget _buildFontSizeOption(ThemeProvider themeProvider,
       {required String title,
       required FontSize value,
       required bool isSelected,
       required VoidCallback onTap}) {
-    // حجم المعاينة بناءً على القيمة
     double previewSize;
     switch (value) {
       case FontSize.small:
@@ -1047,7 +1058,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           children: [
             Row(
               children: [
-                // أيقونة حجم الخط
                 Icon(
                   value == FontSize.small
                       ? Icons.text_fields_rounded
@@ -1071,7 +1081,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 ),
               ],
             ),
-            // معاينة حجم الخط التي تتغير فوراً
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
               style: GoogleFonts.cairo(
