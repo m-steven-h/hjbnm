@@ -1,4 +1,4 @@
-// screens/question_detail_page.dart
+// lib/screens/question_detail_page.dart
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,12 +6,7 @@ import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/questions_service.dart';
 import '../models/question_model.dart';
-
-// ✅ قائمة أسماء المؤسسين
-const List<String> _founderNames = [
-  'M STEVEN H',
-  // أضف أي أسماء أخرى للمؤسسين هنا
-];
+import '../secrets.dart';
 
 class QuestionDetailPage extends StatefulWidget {
   final QuestionModel question;
@@ -317,8 +312,7 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
     return Consumer<ThemeProvider>(
       builder: (context, provider, child) {
         final isQuestionLiked = _question.isLikedBy(widget.currentUserId);
-        final isQuestionOwnerFounder =
-            _founderNames.contains(_question.userName.trim());
+        final isQuestionOwnerFounder = _question.userId == Secrets.founderId;
 
         return Directionality(
           textDirection: TextDirection.rtl,
@@ -384,18 +378,20 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                                     width: 48,
                                     height: 48,
                                     decoration: BoxDecoration(
-                                      gradient: LinearGradient(colors: [
-                                        const Color(0xFF4ADE80)
-                                            .withOpacity(0.15),
-                                        const Color(0xFF4ADE80)
-                                            .withOpacity(0.05)
-                                      ]),
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          const Color(0xFF4ADE80)
+                                              .withOpacity(0.15),
+                                          const Color(0xFF4ADE80)
+                                              .withOpacity(0.05),
+                                        ],
+                                      ),
                                       borderRadius: BorderRadius.circular(24),
                                     ),
                                     child: const Center(
-                                        child: Icon(Icons.person_rounded,
-                                            color: Color(0xFF4ADE80),
-                                            size: 28)),
+                                      child: Icon(Icons.person_rounded,
+                                          color: Color(0xFF4ADE80), size: 28),
+                                    ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -403,7 +399,6 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        // ✅ اسم المؤسس باللون الذهبي للسؤال
                                         Text(
                                           _question.userName,
                                           style: GoogleFonts.cairo(
@@ -412,39 +407,43 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                                                 ? const Color(0xFFFFD700)
                                                 : provider.textColor,
                                             shadows: isQuestionOwnerFounder
-                                                ? [
+                                                ? const [
                                                     Shadow(
-                                                      color: const Color(
-                                                              0xFFFFD700)
-                                                          .withOpacity(0.5),
+                                                      color: Color(0xFFFFD700),
                                                       blurRadius: 4,
                                                     )
                                                   ]
                                                 : null,
                                           ),
                                         ),
-                                        Text(_formatDate(_question.createdAt),
-                                            style: GoogleFonts.cairo(
-                                                fontSize: 11,
-                                                color: provider
-                                                    .secondaryTextColor)),
+                                        Text(
+                                          _formatDate(_question.createdAt),
+                                          style: GoogleFonts.cairo(
+                                              fontSize: 11,
+                                              color:
+                                                  provider.secondaryTextColor),
+                                        ),
                                       ],
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 16),
-                              Text(_question.title,
-                                  style: GoogleFonts.cairo(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      color: provider.textColor)),
+                              Text(
+                                _question.title,
+                                style: GoogleFonts.cairo(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: provider.textColor),
+                              ),
                               const SizedBox(height: 12),
-                              Text(_question.content,
-                                  style: GoogleFonts.cairo(
-                                      fontSize: 16,
-                                      color: provider.textColor,
-                                      height: 1.5)),
+                              Text(
+                                _question.content,
+                                style: GoogleFonts.cairo(
+                                    fontSize: 16,
+                                    color: provider.textColor,
+                                    height: 1.5),
+                              ),
                               const SizedBox(height: 16),
                               GestureDetector(
                                 onTap: _toggleLikeQuestionInstant,
@@ -465,8 +464,10 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    Text('${_question.likesCount}',
-                                        style: GoogleFonts.cairo(fontSize: 14)),
+                                    Text(
+                                      '${_question.likesCount}',
+                                      style: GoogleFonts.cairo(fontSize: 14),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -474,11 +475,13 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        Text('${_question.replies.length} ردود',
-                            style: GoogleFonts.cairo(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: provider.textColor)),
+                        Text(
+                          '${_question.replies.length} ردود',
+                          style: GoogleFonts.cairo(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: provider.textColor),
+                        ),
                         const SizedBox(height: 12),
                         ..._question.replies.asMap().entries.map((entry) {
                           final replyIndex = entry.key;
@@ -489,7 +492,7 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                               reply.userId == widget.currentUserId ||
                               _question.userId == widget.currentUserId;
                           final isReplyOwnerFounder =
-                              _founderNames.contains(reply.userName.trim());
+                              reply.userId == Secrets.founderId;
 
                           return Container(
                             margin: const EdgeInsets.only(bottom: 12),
@@ -507,24 +510,25 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                                       width: 32,
                                       height: 32,
                                       decoration: BoxDecoration(
-                                        gradient: LinearGradient(colors: [
-                                          const Color(0xFF4ADE80)
-                                              .withOpacity(0.15),
-                                          const Color(0xFF4ADE80)
-                                              .withOpacity(0.05)
-                                        ]),
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            const Color(0xFF4ADE80)
+                                                .withOpacity(0.15),
+                                            const Color(0xFF4ADE80)
+                                                .withOpacity(0.05),
+                                          ],
+                                        ),
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                       child: const Center(
-                                          child: Icon(Icons.person_rounded,
-                                              color: Color(0xFF4ADE80),
-                                              size: 20)),
+                                        child: Icon(Icons.person_rounded,
+                                            color: Color(0xFF4ADE80), size: 20),
+                                      ),
                                     ),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Row(
                                         children: [
-                                          // ✅ اسم المؤسس باللون الذهبي للردود
                                           Text(
                                             reply.userName,
                                             style: GoogleFonts.cairo(
@@ -533,11 +537,10 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                                                   ? const Color(0xFFFFD700)
                                                   : provider.textColor,
                                               shadows: isReplyOwnerFounder
-                                                  ? [
+                                                  ? const [
                                                       Shadow(
-                                                        color: const Color(
-                                                                0xFFFFD700)
-                                                            .withOpacity(0.5),
+                                                        color:
+                                                            Color(0xFFFFD700),
                                                         blurRadius: 4,
                                                       )
                                                     ]
@@ -545,11 +548,13 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
-                                          Text(_formatDate(reply.createdAt),
-                                              style: GoogleFonts.cairo(
-                                                  fontSize: 10,
-                                                  color: provider
-                                                      .secondaryTextColor)),
+                                          Text(
+                                            _formatDate(reply.createdAt),
+                                            style: GoogleFonts.cairo(
+                                                fontSize: 10,
+                                                color: provider
+                                                    .secondaryTextColor),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -565,10 +570,11 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                Text(reply.content,
-                                    style: GoogleFonts.cairo(
-                                        fontSize: 14,
-                                        color: provider.textColor)),
+                                Text(
+                                  reply.content,
+                                  style: GoogleFonts.cairo(
+                                      fontSize: 14, color: provider.textColor),
+                                ),
                                 const SizedBox(height: 8),
                                 GestureDetector(
                                   onTap: () => _toggleLikeReplyInstant(
@@ -590,9 +596,10 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
                                         ),
                                       ),
                                       const SizedBox(width: 4),
-                                      Text('${reply.likedBy.length}',
-                                          style:
-                                              GoogleFonts.cairo(fontSize: 12)),
+                                      Text(
+                                        '${reply.likedBy.length}',
+                                        style: GoogleFonts.cairo(fontSize: 12),
+                                      ),
                                     ],
                                   ),
                                 ),
