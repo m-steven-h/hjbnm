@@ -44,7 +44,6 @@ class ReplyModel {
     );
   }
 
-  // ✅ نسخة محدثة من الرد
   ReplyModel copyWith({
     String? id,
     String? userId,
@@ -120,7 +119,6 @@ class QuestionModel {
     );
   }
 
-  // ✅ نسخة محدثة من السؤال
   QuestionModel copyWith({
     String? id,
     String? userId,
