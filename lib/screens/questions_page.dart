@@ -1,3 +1,5 @@
+// lib/screens/questions_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +8,7 @@ import '../providers/theme_provider.dart';
 import '../services/questions_service.dart';
 import '../models/question_model.dart';
 import 'question_detail_page.dart';
+import '../secrets.dart';
 
 class QuestionsPage extends StatefulWidget {
   const QuestionsPage({super.key});
@@ -33,7 +36,6 @@ class _QuestionsPageState extends State<QuestionsPage>
     _loadCurrentUser();
     _loadQuestions();
 
-    // إعداد Animation للـ Shimmer
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -50,7 +52,7 @@ class _QuestionsPageState extends State<QuestionsPage>
       setState(() {
         _currentUserId = prefs.getString('userId') ?? '';
         _currentUserName = prefs.getString('userName') ?? 'مستخدم';
-        _isFounder = prefs.getBool('isFounder') ?? false;
+        _isFounder = _currentUserId == Secrets.founderId;
       });
     }
   }
@@ -289,7 +291,6 @@ class _QuestionsPageState extends State<QuestionsPage>
         ]),
         backgroundColor: const Color(0xFF4ADE80),
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -341,18 +342,14 @@ class _QuestionsPageState extends State<QuestionsPage>
           TextButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
-
               _showLoadingSnackBar('جاري حذف السؤال...');
-
               final success = await _questionsService.deleteQuestion(
                   question.id, _currentUserId, _isFounder);
-
               if (success && mounted) {
                 setState(() {
                   _questions.removeAt(index);
                 });
                 _showSuccessSnackBar('تم حذف السؤال بنجاح');
-
                 await _questionsService.clearCache();
                 final refreshedQuestions =
                     await _questionsService.getQuestions();
@@ -424,9 +421,8 @@ class _QuestionsPageState extends State<QuestionsPage>
                   onPressed: _showAddQuestionDialog,
                 ),
                 IconButton(
-                  icon: AnimatedRotation(
-                    duration: const Duration(milliseconds: 500),
-                    turns: _isRefreshing ? 1.0 : 0.0,
+                  icon: Transform.rotate(
+                    angle: _isRefreshing ? 3.14159 : 0,
                     child: Icon(
                       _isRefreshing
                           ? Icons.hourglass_empty_rounded
@@ -439,7 +435,7 @@ class _QuestionsPageState extends State<QuestionsPage>
               ],
             ),
             body: _isLoading
-                ? _buildProfessionalSkeleton(provider)
+                ? _buildSkeletonLoader(provider)
                 : RefreshIndicator(
                     onRefresh: _refresh,
                     color: const Color(0xFF4ADE80),
@@ -451,132 +447,75 @@ class _QuestionsPageState extends State<QuestionsPage>
     );
   }
 
-  // ==================== Professional Skeleton Screens ====================
-
-  Widget _buildProfessionalSkeleton(ThemeProvider provider) {
+  Widget _buildSkeletonLoader(ThemeProvider provider) {
     return ListView.builder(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(16),
       itemCount: 5,
-      itemBuilder: (context, index) => _buildAnimatedSkeletonCard(provider),
-    );
-  }
-
-  Widget _buildAnimatedSkeletonCard(ThemeProvider provider) {
-    return AnimatedBuilder(
-      animation: _shimmerAnimation,
-      builder: (context, child) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: provider.cardColor,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // رأس البطاقة (صورة واسم)
-              Row(
-                children: [
-                  _buildShimmerAvatar(40, 40),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildShimmerLine(120, 16, 8),
-                        const SizedBox(height: 6),
-                        _buildShimmerLine(80, 12, 6),
-                      ],
-                    ),
+      itemBuilder: (context, index) => Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: provider.cardColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // عنوان السؤال
-              _buildShimmerLine(200, 20, 10),
-              const SizedBox(height: 12),
-              // محتوى السؤال
-              _buildShimmerLine(double.infinity, 14, 7),
-              const SizedBox(height: 8),
-              _buildShimmerLine(150, 14, 7),
-              const SizedBox(height: 16),
-              // أزرار الإعجاب والتعليقات
-              Row(
-                children: [
-                  _buildShimmerLine(50, 20, 10),
-                  const SizedBox(width: 20),
-                  _buildShimmerLine(50, 20, 10),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildShimmerLine(double width, double height, double radius) {
-    return ShaderMask(
-      shaderCallback: (bounds) {
-        return LinearGradient(
-          begin: Alignment(_shimmerAnimation.value, 0),
-          end: Alignment(_shimmerAnimation.value + 1.5, 0),
-          colors: const [
-            Color(0xFFE0E0E0),
-            Color(0xFFF5F5F5),
-            Color(0xFFE0E0E0),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 16,
+                        color: Colors.grey.shade300,
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        width: 80,
+                        height: 12,
+                        color: Colors.grey.shade300,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: 200,
+              height: 20,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              height: 14,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: 150,
+              height: 14,
+              color: Colors.grey.shade300,
+            ),
           ],
-          stops: [0.0, 0.5, 1.0],
-        ).createShader(bounds);
-      },
-      blendMode: BlendMode.srcATop,
-      child: Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(radius),
         ),
       ),
     );
   }
-
-  Widget _buildShimmerAvatar(double width, double height) {
-    return ShaderMask(
-      shaderCallback: (bounds) {
-        return LinearGradient(
-          begin: Alignment(_shimmerAnimation.value, 0),
-          end: Alignment(_shimmerAnimation.value + 1.5, 0),
-          colors: const [
-            Color(0xFFE0E0E0),
-            Color(0xFFF5F5F5),
-            Color(0xFFE0E0E0),
-          ],
-          stops: [0.0, 0.5, 1.0],
-        ).createShader(bounds);
-      },
-      blendMode: BlendMode.srcATop,
-      child: Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(height / 2),
-        ),
-      ),
-    );
-  }
-
-  // ==================== Body Widget ====================
 
   Widget _buildBody(ThemeProvider provider) {
     if (_questions.isEmpty) {
@@ -587,13 +526,21 @@ class _QuestionsPageState extends State<QuestionsPage>
             Icon(Icons.question_answer_outlined,
                 size: 64, color: provider.secondaryTextColor),
             const SizedBox(height: 16),
-            Text('لا توجد أسئلة حالياً',
-                style: GoogleFonts.cairo(
-                    fontSize: 16, color: provider.secondaryTextColor)),
+            Text(
+              'لا توجد أسئلة حالياً',
+              style: GoogleFonts.cairo(
+                fontSize: 16,
+                color: provider.secondaryTextColor,
+              ),
+            ),
             const SizedBox(height: 16),
-            Text('كن أول من يسأل!',
-                style: GoogleFonts.cairo(
-                    fontSize: 14, color: provider.secondaryTextColor)),
+            Text(
+              'كن أول من يسأل!',
+              style: GoogleFonts.cairo(
+                fontSize: 14,
+                color: provider.secondaryTextColor,
+              ),
+            ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: _showAddQuestionDialog,
@@ -603,7 +550,8 @@ class _QuestionsPageState extends State<QuestionsPage>
                 backgroundColor: const Color(0xFF4ADE80),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],
@@ -619,8 +567,7 @@ class _QuestionsPageState extends State<QuestionsPage>
         final question = _questions[index];
         final isLiked = question.isLikedBy(_currentUserId);
         final isOwner = question.userId == _currentUserId;
-        final isQuestionOwnerFounder =
-            _founderNames.contains(question.userName.trim());
+        final isQuestionOwnerFounder = question.userId == Secrets.founderId;
 
         return GestureDetector(
           onTap: () {
@@ -644,7 +591,10 @@ class _QuestionsPageState extends State<QuestionsPage>
               color: provider.cardColor,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                ),
               ],
             ),
             child: Padding(
@@ -661,21 +611,21 @@ class _QuestionsPageState extends State<QuestionsPage>
                           gradient: LinearGradient(
                             colors: [
                               const Color(0xFF4ADE80).withOpacity(0.15),
-                              const Color(0xFF4ADE80).withOpacity(0.05)
+                              const Color(0xFF4ADE80).withOpacity(0.05),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Center(
-                            child: Icon(Icons.person_rounded,
-                                color: Color(0xFF4ADE80), size: 24)),
+                          child: Icon(Icons.person_rounded,
+                              color: Color(0xFF4ADE80), size: 24),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // ✅ اسم المؤسس باللون الذهبي
                             Text(
                               question.userName,
                               style: GoogleFonts.cairo(
@@ -684,20 +634,21 @@ class _QuestionsPageState extends State<QuestionsPage>
                                     ? const Color(0xFFFFD700)
                                     : provider.textColor,
                                 shadows: isQuestionOwnerFounder
-                                    ? [
+                                    ? const [
                                         Shadow(
-                                          color: Color(0xFFFFD700)
-                                              .withOpacity(0.5),
-                                          blurRadius: 4,
-                                        )
+                                            color: Color(0xFFFFD700),
+                                            blurRadius: 4)
                                       ]
                                     : null,
                               ),
                             ),
-                            Text(_formatDate(question.createdAt),
-                                style: GoogleFonts.cairo(
-                                    fontSize: 11,
-                                    color: provider.secondaryTextColor)),
+                            Text(
+                              _formatDate(question.createdAt),
+                              style: GoogleFonts.cairo(
+                                fontSize: 11,
+                                color: provider.secondaryTextColor,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -708,26 +659,37 @@ class _QuestionsPageState extends State<QuestionsPage>
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12)),
-                            child: const Icon(Icons.delete_outline_rounded,
-                                color: Colors.red, size: 20),
+                              color: Colors.red.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.delete_outline_rounded,
+                              color: Colors.red,
+                              size: 20,
+                            ),
                           ),
                         ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text(question.title,
-                      style: GoogleFonts.cairo(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: provider.textColor)),
+                  Text(
+                    question.title,
+                    style: GoogleFonts.cairo(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: provider.textColor,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  Text(question.content,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.cairo(
-                          fontSize: 14, color: provider.secondaryTextColor)),
+                  Text(
+                    question.content,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.cairo(
+                      fontSize: 14,
+                      color: provider.secondaryTextColor,
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -747,21 +709,32 @@ class _QuestionsPageState extends State<QuestionsPage>
                               ),
                             ),
                             const SizedBox(width: 4),
-                            Text('${question.likesCount}',
-                                style: GoogleFonts.cairo(
-                                    fontSize: 13, fontWeight: FontWeight.w500)),
+                            Text(
+                              '${question.likesCount}',
+                              style: GoogleFonts.cairo(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 20),
                       Row(
                         children: [
-                          const Icon(Icons.chat_bubble_outline_rounded,
-                              color: Colors.grey, size: 20),
+                          const Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            color: Colors.grey,
+                            size: 20,
+                          ),
                           const SizedBox(width: 4),
-                          Text('${question.repliesCount}',
-                              style: GoogleFonts.cairo(
-                                  fontSize: 13, fontWeight: FontWeight.w500)),
+                          Text(
+                            '${question.repliesCount}',
+                            style: GoogleFonts.cairo(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -775,9 +748,3 @@ class _QuestionsPageState extends State<QuestionsPage>
     );
   }
 }
-
-// ✅ قائمة أسماء المؤسسين (يجب إضافتها في بداية الكلاس)
-const List<String> _founderNames = [
-  'M STEVEN H',
-  // أضف أي أسماء أخرى للمؤسسين هنا
-];
