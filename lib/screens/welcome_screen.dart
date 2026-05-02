@@ -523,121 +523,128 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           opacity: value,
           child: Transform.translate(
             offset: Offset(0, 50 * (1 - value)),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildSettingsLogo(themeProvider),
-                const SizedBox(height: 30),
-                Text(
-                  'خصص تجربتك',
-                  style: GoogleFonts.cairo(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: themeProvider.textColor,
-                  ),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildSettingsLogo(themeProvider),
+                    const SizedBox(height: 30),
+                    Text(
+                      'خصص تجربتك',
+                      style: GoogleFonts.cairo(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: themeProvider.textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'اختر الإعدادات التي تناسبك',
+                      style: GoogleFonts.cairo(
+                        fontSize: 14,
+                        color: themeProvider.secondaryTextColor,
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    // خيارات المظهر
+                    _buildSettingsCard(
+                      themeProvider,
+                      title: 'المظهر',
+                      icon: Icons.palette_rounded,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildThemeOption(
+                              themeProvider,
+                              title: 'فاتح',
+                              icon: Icons.light_mode_rounded,
+                              value: ThemeModeType.light,
+                              isSelected: _selectedTheme == ThemeModeType.light,
+                              onTap: () {
+                                setState(() {
+                                  _selectedTheme = ThemeModeType.light;
+                                });
+                                themeProvider.setThemeMode(ThemeModeType.light);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildThemeOption(
+                              themeProvider,
+                              title: 'داكن',
+                              icon: Icons.dark_mode_rounded,
+                              value: ThemeModeType.dark,
+                              isSelected: _selectedTheme == ThemeModeType.dark,
+                              onTap: () {
+                                setState(() {
+                                  _selectedTheme = ThemeModeType.dark;
+                                });
+                                themeProvider.setThemeMode(ThemeModeType.dark);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // خيارات حجم الخط
+                    _buildSettingsCard(
+                      themeProvider,
+                      title: 'حجم الخط',
+                      icon: Icons.text_fields_rounded,
+                      child: Column(
+                        children: [
+                          _buildFontSizeOption(
+                            themeProvider,
+                            title: 'صغير',
+                            value: FontSize.small,
+                            isSelected: _selectedFontSize == FontSize.small,
+                            onTap: () {
+                              setState(() {
+                                _selectedFontSize = FontSize.small;
+                              });
+                              themeProvider.setFontSize(FontSize.small);
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _buildFontSizeOption(
+                            themeProvider,
+                            title: 'وسط',
+                            value: FontSize.medium,
+                            isSelected: _selectedFontSize == FontSize.medium,
+                            onTap: () {
+                              setState(() {
+                                _selectedFontSize = FontSize.medium;
+                              });
+                              themeProvider.setFontSize(FontSize.medium);
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _buildFontSizeOption(
+                            themeProvider,
+                            title: 'كبير',
+                            value: FontSize.large,
+                            isSelected: _selectedFontSize == FontSize.large,
+                            onTap: () {
+                              setState(() {
+                                _selectedFontSize = FontSize.large;
+                              });
+                              themeProvider.setFontSize(FontSize.large);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    _buildFinishButton(themeProvider),
+                    const SizedBox(height: 20), // مسافة إضافية في الأسفل
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'اختر الإعدادات التي تناسبك',
-                  style: GoogleFonts.cairo(
-                    fontSize: 14,
-                    color: themeProvider.secondaryTextColor,
-                  ),
-                ),
-                const SizedBox(height: 30),
-                // خيارات المظهر
-                _buildSettingsCard(
-                  themeProvider,
-                  title: 'المظهر',
-                  icon: Icons.palette_rounded,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildThemeOption(
-                          themeProvider,
-                          title: 'فاتح',
-                          icon: Icons.light_mode_rounded,
-                          value: ThemeModeType.light,
-                          isSelected: _selectedTheme == ThemeModeType.light,
-                          onTap: () {
-                            setState(() {
-                              _selectedTheme = ThemeModeType.light;
-                            });
-                            themeProvider.setThemeMode(ThemeModeType.light);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildThemeOption(
-                          themeProvider,
-                          title: 'داكن',
-                          icon: Icons.dark_mode_rounded,
-                          value: ThemeModeType.dark,
-                          isSelected: _selectedTheme == ThemeModeType.dark,
-                          onTap: () {
-                            setState(() {
-                              _selectedTheme = ThemeModeType.dark;
-                            });
-                            themeProvider.setThemeMode(ThemeModeType.dark);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // خيارات حجم الخط
-                _buildSettingsCard(
-                  themeProvider,
-                  title: 'حجم الخط',
-                  icon: Icons.text_fields_rounded,
-                  child: Column(
-                    children: [
-                      _buildFontSizeOption(
-                        themeProvider,
-                        title: 'صغير',
-                        value: FontSize.small,
-                        isSelected: _selectedFontSize == FontSize.small,
-                        onTap: () {
-                          setState(() {
-                            _selectedFontSize = FontSize.small;
-                          });
-                          themeProvider.setFontSize(FontSize.small);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _buildFontSizeOption(
-                        themeProvider,
-                        title: 'وسط',
-                        value: FontSize.medium,
-                        isSelected: _selectedFontSize == FontSize.medium,
-                        onTap: () {
-                          setState(() {
-                            _selectedFontSize = FontSize.medium;
-                          });
-                          themeProvider.setFontSize(FontSize.medium);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _buildFontSizeOption(
-                        themeProvider,
-                        title: 'كبير',
-                        value: FontSize.large,
-                        isSelected: _selectedFontSize == FontSize.large,
-                        onTap: () {
-                          setState(() {
-                            _selectedFontSize = FontSize.large;
-                          });
-                          themeProvider.setFontSize(FontSize.large);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 40),
-                _buildFinishButton(themeProvider),
-              ],
+              ),
             ),
           ),
         );
