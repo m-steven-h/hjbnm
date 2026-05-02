@@ -23,12 +23,9 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   String _userName = 'مستخدم دقيقة صلاة';
   bool _isFounder = false;
+  String _userId = '';
   String? _profileImage;
   final ImagePicker _picker = ImagePicker();
-
-  static const List<String> _founderNames = [
-    'M STEVEN H',
-  ];
 
   @override
   void initState() {
@@ -40,7 +37,8 @@ class _ProfilePageState extends State<ProfilePage> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _userName = prefs.getString('userName') ?? 'مستخدم دقيقة صلاة';
-      _isFounder = prefs.getBool('isFounder') ?? false;
+      _userId = prefs.getString('userId') ?? '';
+      _isFounder = _userId == Secrets.founderId;
       _profileImage = prefs.getString('profileImage');
     });
   }
@@ -48,12 +46,6 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _saveUserData(String name) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('userName', name);
-    await _loadUserData();
-  }
-
-  Future<void> _saveFounderStatus(bool isFounder) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isFounder', isFounder);
     await _loadUserData();
   }
 
@@ -438,7 +430,6 @@ class _ProfilePageState extends State<ProfilePage> {
               actions: [
                 Row(
                   children: [
-                    // زر تأكيد (يمين)
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
@@ -466,7 +457,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // زر إلغاء (يسار)
                     Expanded(
                       child: TextButton(
                         onPressed: () {
@@ -502,14 +492,14 @@ class _ProfilePageState extends State<ProfilePage> {
       return false;
     }
 
-    final bool isNewNameFounder = _founderNames.contains(newName.trim());
+    final bool isNewNameFounder = newName.trim() == 'M STEVEN H';
     final bool wasFounder = _isFounder;
 
     if (!wasFounder && isNewNameFounder) {
       final bool codeVerified = await _showSecretCodeDialog(context);
       if (codeVerified) {
-        await _saveFounderStatus(true);
         await _saveUserData(newName);
+        await _loadUserData();
         _showSuccessSnackBar(context, 'تم تحديث الاسم وصلاحيات المؤسس');
         return true;
       } else {
@@ -517,16 +507,18 @@ class _ProfilePageState extends State<ProfilePage> {
         return false;
       }
     } else if (wasFounder && !isNewNameFounder) {
-      await _saveFounderStatus(false);
       await _saveUserData(newName);
+      await _loadUserData();
       _showSuccessSnackBar(context, 'تم تحديث الاسم (أصبحت مستخدم عادي)');
       return true;
     } else if (wasFounder && isNewNameFounder) {
       await _saveUserData(newName);
+      await _loadUserData();
       _showSuccessSnackBar(context, 'تم تحديث الاسم');
       return true;
     } else {
       await _saveUserData(newName);
+      await _loadUserData();
       _showSuccessSnackBar(context, 'تم تحديث الاسم');
       return true;
     }
@@ -608,7 +600,6 @@ class _ProfilePageState extends State<ProfilePage> {
             actions: [
               Row(
                 children: [
-                  // زر حفظ (يمين)
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
@@ -646,7 +637,6 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // زر إلغاء (يسار)
                   Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.pop(dialogContext),
@@ -728,6 +718,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildProfileCard(ThemeProvider provider) {
+    final isFounder = _userId == Secrets.founderId;
     return GestureDetector(
       onTap: _showImagePickerDialog,
       child: Container(
@@ -735,14 +726,16 @@ class _ProfilePageState extends State<ProfilePage> {
           gradient: LinearGradient(
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
-            colors: _isFounder
-                ? [const Color(0xFF4ADE80), const Color(0xFF059669)]
+            colors: isFounder
+                ? [const Color(0xFF4ADE80), const Color(0xFF4ADE80)]
                 : [const Color(0xFF4ADE80), const Color(0xFF22C55E)],
           ),
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF4ADE80).withOpacity(0.3),
+              color: isFounder
+                  ? const Color(0xFF4ADE80).withOpacity(0.3)
+                  : const Color(0xFF4ADE80).withOpacity(0.3),
               blurRadius: 15,
               offset: const Offset(0, 5),
             ),
@@ -797,7 +790,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  _isFounder ? 'مؤسس التطبيق' : 'مستخدم دقيقة صلاة',
+                  isFounder ? 'مؤسس التطبيق' : 'مستخدم دقيقة صلاة',
                   style: GoogleFonts.cairo(
                     fontSize: 14 * provider.fontScale,
                     color: Colors.white,
