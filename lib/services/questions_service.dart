@@ -11,7 +11,6 @@ class QuestionsService {
   static const String _masterKey = Secrets.masterKey;
   static const String _publicUrl = 'https://api.jsonbin.io/v3/b/$_binId/latest';
   static const String _writeUrl = 'https://api.jsonbin.io/v3/b/$_binId';
-
   static const String _cachedQuestionsKey = 'cached_questions';
 
   Future<List<QuestionModel>> getQuestions() async {
@@ -19,10 +18,13 @@ class QuestionsService {
     final String? cachedData = prefs.getString(_cachedQuestionsKey);
 
     if (cachedData != null) {
-      print('📦 جلب الأسئلة من الكاش');
       try {
         final List<dynamic> decoded = jsonDecode(cachedData);
-        return decoded.map((json) => QuestionModel.fromMap(json)).toList();
+        final questions =
+            decoded.map((json) => QuestionModel.fromMap(json)).toList();
+        if (questions.isNotEmpty) {
+          return questions;
+        }
       } catch (e) {
         print('❌ خطأ في قراءة الكاش: $e');
       }
@@ -35,7 +37,10 @@ class QuestionsService {
       print('🌐 جلب الأسئلة من API...');
       final response = await http.get(
         Uri.parse(_publicUrl),
-        headers: {'X-Master-Key': _masterKey},
+        headers: {
+          'X-Master-Key': _masterKey,
+          'Content-Type': 'application/json',
+        },
       ).timeout(const Duration(seconds: 15));
 
       print('📥 GET Status: ${response.statusCode}');
@@ -45,24 +50,17 @@ class QuestionsService {
 
         List<dynamic> questionsJson = [];
 
-        if (data.containsKey('record') && data['record'] != null) {
-          final dynamic record = data['record'];
+        if (data['record'] != null) {
+          final record = data['record'];
           if (record is Map<String, dynamic>) {
-            if (record.containsKey('questions') &&
-                record['questions'] != null) {
-              final dynamic questionsData = record['questions'];
-              if (questionsData is List) {
-                questionsJson = questionsData;
-              }
+            if (record.containsKey('questions')) {
+              questionsJson = record['questions'] ?? [];
             }
           } else if (record is List) {
             questionsJson = record;
           }
-        } else if (data.containsKey('questions') && data['questions'] != null) {
-          final dynamic questionsData = data['questions'];
-          if (questionsData is List) {
-            questionsJson = questionsData;
-          }
+        } else if (data['questions'] != null) {
+          questionsJson = data['questions'];
         }
 
         print('📊 عدد الأسئلة المستلمة: ${questionsJson.length}');
@@ -74,10 +72,10 @@ class QuestionsService {
           }
         }
 
+        questions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         await _cacheQuestions(questions);
         return questions;
       }
-      print('❌ فشل GET: ${response.statusCode}');
       return [];
     } catch (e) {
       print('❌ فشل الجلب: $e');
@@ -96,18 +94,17 @@ class QuestionsService {
   Future<bool> addQuestion(
       String userId, String userName, String title, String content) async {
     try {
-      print('========================================');
       print('📝 بدء إضافة سؤال جديد');
       print('👤 userId: $userId');
-      print('🏷️ title: $title');
-      print('========================================');
+      print('👤 userName: $userName');
 
       final getResponse = await http.get(
         Uri.parse(_publicUrl),
-        headers: {'X-Master-Key': _masterKey},
+        headers: {
+          'X-Master-Key': _masterKey,
+          'Content-Type': 'application/json',
+        },
       ).timeout(const Duration(seconds: 15));
-
-      print('📥 GET Status: ${getResponse.statusCode}');
 
       if (getResponse.statusCode != 200) {
         print('❌ فشل جلب البيانات الحالية');
@@ -116,26 +113,20 @@ class QuestionsService {
 
       final Map<String, dynamic> data = jsonDecode(getResponse.body);
 
-      List<dynamic> questions = [];
+      List<dynamic> existingQuestions = [];
 
-      if (data.containsKey('record') && data['record'] != null) {
-        final dynamic record = data['record'];
+      if (data['record'] != null) {
+        final record = data['record'];
         if (record is Map<String, dynamic>) {
-          if (record.containsKey('questions') && record['questions'] != null) {
-            final dynamic questionsData = record['questions'];
-            if (questionsData is List) {
-              questions = questionsData;
-            }
-          }
+          existingQuestions = record['questions'] ?? [];
+        } else if (record is List) {
+          existingQuestions = record;
         }
-      } else if (data.containsKey('questions') && data['questions'] != null) {
-        final dynamic questionsData = data['questions'];
-        if (questionsData is List) {
-          questions = questionsData;
-        }
+      } else if (data['questions'] != null) {
+        existingQuestions = data['questions'];
       }
 
-      print('📊 عدد الأسئلة الحالي: ${questions.length}');
+      print('📊 عدد الأسئلة الحالي: ${existingQuestions.length}');
 
       final Map<String, dynamic> newQuestion = {
         'id': DateTime.now().millisecondsSinceEpoch.toString(),
@@ -148,11 +139,10 @@ class QuestionsService {
         'replies': <dynamic>[],
       };
 
-      questions.insert(0, newQuestion);
-      print('📊 عدد الأسئلة بعد الإضافة: ${questions.length}');
+      existingQuestions.insert(0, newQuestion);
 
       final Map<String, dynamic> newData = {
-        'questions': questions,
+        'questions': existingQuestions,
       };
 
       final putResponse = await http
@@ -169,6 +159,7 @@ class QuestionsService {
       print('📤 PUT Status: ${putResponse.statusCode}');
 
       if (putResponse.statusCode == 200 || putResponse.statusCode == 201) {
+        await clearCache();
         final updatedQuestions = await _fetchFromApi();
         await _cacheQuestions(updatedQuestions);
         print('✅ تم إضافة السؤال بنجاح');
@@ -190,37 +181,32 @@ class QuestionsService {
 
       final getResponse = await http.get(
         Uri.parse(_publicUrl),
-        headers: {'X-Master-Key': _masterKey},
+        headers: {
+          'X-Master-Key': _masterKey,
+          'Content-Type': 'application/json',
+        },
       ).timeout(const Duration(seconds: 15));
 
       if (getResponse.statusCode != 200) return false;
 
       final Map<String, dynamic> data = jsonDecode(getResponse.body);
 
-      List<dynamic> questions = [];
+      List<dynamic> existingQuestions = [];
 
-      if (data.containsKey('record') && data['record'] != null) {
-        final dynamic record = data['record'];
+      if (data['record'] != null) {
+        final record = data['record'];
         if (record is Map<String, dynamic>) {
-          if (record.containsKey('questions') && record['questions'] != null) {
-            final dynamic questionsData = record['questions'];
-            if (questionsData is List) {
-              questions = questionsData;
-            }
-          }
+          existingQuestions = record['questions'] ?? [];
+        } else if (record is List) {
+          existingQuestions = record;
         }
-      } else if (data.containsKey('questions') && data['questions'] != null) {
-        final dynamic questionsData = data['questions'];
-        if (questionsData is List) {
-          questions = questionsData;
-        }
-      } else {
-        return false;
+      } else if (data['questions'] != null) {
+        existingQuestions = data['questions'];
       }
 
       int questionIndex = -1;
-      for (int i = 0; i < questions.length; i++) {
-        final Map<String, dynamic> q = questions[i] as Map<String, dynamic>;
+      for (int i = 0; i < existingQuestions.length; i++) {
+        final q = existingQuestions[i] as Map<String, dynamic>;
         if (q['id'] == questionId) {
           questionIndex = i;
           break;
@@ -232,6 +218,9 @@ class QuestionsService {
         return false;
       }
 
+      final Map<String, dynamic> question =
+          existingQuestions[questionIndex] as Map<String, dynamic>;
+
       final Map<String, dynamic> newReply = {
         'id': DateTime.now().millisecondsSinceEpoch.toString(),
         'userId': userId,
@@ -241,15 +230,13 @@ class QuestionsService {
         'likedBy': <String>[],
       };
 
-      final Map<String, dynamic> question =
-          questions[questionIndex] as Map<String, dynamic>;
       if (question['replies'] == null) {
         question['replies'] = <dynamic>[];
       }
       (question['replies'] as List<dynamic>).insert(0, newReply);
 
       final Map<String, dynamic> newData = {
-        'questions': questions,
+        'questions': existingQuestions,
       };
 
       final putResponse = await http
@@ -264,6 +251,7 @@ class QuestionsService {
           .timeout(const Duration(seconds: 20));
 
       if (putResponse.statusCode == 200 || putResponse.statusCode == 201) {
+        await clearCache();
         final updatedQuestions = await _fetchFromApi();
         await _cacheQuestions(updatedQuestions);
         print('✅ تم إضافة الرد بنجاح');
@@ -281,37 +269,32 @@ class QuestionsService {
     try {
       final getResponse = await http.get(
         Uri.parse(_publicUrl),
-        headers: {'X-Master-Key': _masterKey},
+        headers: {
+          'X-Master-Key': _masterKey,
+          'Content-Type': 'application/json',
+        },
       ).timeout(const Duration(seconds: 15));
 
       if (getResponse.statusCode != 200) return false;
 
       final Map<String, dynamic> data = jsonDecode(getResponse.body);
 
-      List<dynamic> questions = [];
+      List<dynamic> existingQuestions = [];
 
-      if (data.containsKey('record') && data['record'] != null) {
-        final dynamic record = data['record'];
+      if (data['record'] != null) {
+        final record = data['record'];
         if (record is Map<String, dynamic>) {
-          if (record.containsKey('questions') && record['questions'] != null) {
-            final dynamic questionsData = record['questions'];
-            if (questionsData is List) {
-              questions = questionsData;
-            }
-          }
+          existingQuestions = record['questions'] ?? [];
+        } else if (record is List) {
+          existingQuestions = record;
         }
-      } else if (data.containsKey('questions') && data['questions'] != null) {
-        final dynamic questionsData = data['questions'];
-        if (questionsData is List) {
-          questions = questionsData;
-        }
-      } else {
-        return false;
+      } else if (data['questions'] != null) {
+        existingQuestions = data['questions'];
       }
 
       int questionIndex = -1;
-      for (int i = 0; i < questions.length; i++) {
-        final Map<String, dynamic> q = questions[i] as Map<String, dynamic>;
+      for (int i = 0; i < existingQuestions.length; i++) {
+        final q = existingQuestions[i] as Map<String, dynamic>;
         if (q['id'] == questionId) {
           questionIndex = i;
           break;
@@ -320,7 +303,7 @@ class QuestionsService {
       if (questionIndex == -1) return false;
 
       final Map<String, dynamic> question =
-          questions[questionIndex] as Map<String, dynamic>;
+          existingQuestions[questionIndex] as Map<String, dynamic>;
 
       if (replyId == null) {
         List<dynamic> likedBy = (question['likedBy'] as List<dynamic>?) ?? [];
@@ -335,7 +318,7 @@ class QuestionsService {
             (question['replies'] as List<dynamic>?) ?? [];
         int replyIndex = -1;
         for (int i = 0; i < replies.length; i++) {
-          final Map<String, dynamic> r = replies[i] as Map<String, dynamic>;
+          final r = replies[i] as Map<String, dynamic>;
           if (r['id'] == replyId) {
             replyIndex = i;
             break;
@@ -355,7 +338,7 @@ class QuestionsService {
       }
 
       final Map<String, dynamic> newData = {
-        'questions': questions,
+        'questions': existingQuestions,
       };
 
       final putResponse = await http
@@ -370,6 +353,7 @@ class QuestionsService {
           .timeout(const Duration(seconds: 20));
 
       if (putResponse.statusCode == 200 || putResponse.statusCode == 201) {
+        await clearCache();
         final updatedQuestions = await _fetchFromApi();
         await _cacheQuestions(updatedQuestions);
         return true;
@@ -388,37 +372,32 @@ class QuestionsService {
 
       final getResponse = await http.get(
         Uri.parse(_publicUrl),
-        headers: {'X-Master-Key': _masterKey},
+        headers: {
+          'X-Master-Key': _masterKey,
+          'Content-Type': 'application/json',
+        },
       ).timeout(const Duration(seconds: 15));
 
       if (getResponse.statusCode != 200) return false;
 
       final Map<String, dynamic> data = jsonDecode(getResponse.body);
 
-      List<dynamic> questions = [];
+      List<dynamic> existingQuestions = [];
 
-      if (data.containsKey('record') && data['record'] != null) {
-        final dynamic record = data['record'];
+      if (data['record'] != null) {
+        final record = data['record'];
         if (record is Map<String, dynamic>) {
-          if (record.containsKey('questions') && record['questions'] != null) {
-            final dynamic questionsData = record['questions'];
-            if (questionsData is List) {
-              questions = questionsData;
-            }
-          }
+          existingQuestions = record['questions'] ?? [];
+        } else if (record is List) {
+          existingQuestions = record;
         }
-      } else if (data.containsKey('questions') && data['questions'] != null) {
-        final dynamic questionsData = data['questions'];
-        if (questionsData is List) {
-          questions = questionsData;
-        }
-      } else {
-        return false;
+      } else if (data['questions'] != null) {
+        existingQuestions = data['questions'];
       }
 
       int questionIndex = -1;
-      for (int i = 0; i < questions.length; i++) {
-        final Map<String, dynamic> q = questions[i] as Map<String, dynamic>;
+      for (int i = 0; i < existingQuestions.length; i++) {
+        final q = existingQuestions[i] as Map<String, dynamic>;
         if (q['id'] == questionId) {
           questionIndex = i;
           break;
@@ -427,7 +406,7 @@ class QuestionsService {
       if (questionIndex == -1) return false;
 
       final Map<String, dynamic> question =
-          questions[questionIndex] as Map<String, dynamic>;
+          existingQuestions[questionIndex] as Map<String, dynamic>;
       final String questionOwnerId = question['userId']?.toString() ?? '';
 
       if (!isFounder && questionOwnerId != currentUserId) {
@@ -435,10 +414,10 @@ class QuestionsService {
         return false;
       }
 
-      questions.removeAt(questionIndex);
+      existingQuestions.removeAt(questionIndex);
 
       final Map<String, dynamic> newData = {
-        'questions': questions,
+        'questions': existingQuestions,
       };
 
       final putResponse = await http
@@ -453,6 +432,7 @@ class QuestionsService {
           .timeout(const Duration(seconds: 20));
 
       if (putResponse.statusCode == 200 || putResponse.statusCode == 201) {
+        await clearCache();
         final updatedQuestions = await _fetchFromApi();
         await _cacheQuestions(updatedQuestions);
         print('✅ تم حذف السؤال');
@@ -472,37 +452,32 @@ class QuestionsService {
 
       final getResponse = await http.get(
         Uri.parse(_publicUrl),
-        headers: {'X-Master-Key': _masterKey},
+        headers: {
+          'X-Master-Key': _masterKey,
+          'Content-Type': 'application/json',
+        },
       ).timeout(const Duration(seconds: 15));
 
       if (getResponse.statusCode != 200) return false;
 
       final Map<String, dynamic> data = jsonDecode(getResponse.body);
 
-      List<dynamic> questions = [];
+      List<dynamic> existingQuestions = [];
 
-      if (data.containsKey('record') && data['record'] != null) {
-        final dynamic record = data['record'];
+      if (data['record'] != null) {
+        final record = data['record'];
         if (record is Map<String, dynamic>) {
-          if (record.containsKey('questions') && record['questions'] != null) {
-            final dynamic questionsData = record['questions'];
-            if (questionsData is List) {
-              questions = questionsData;
-            }
-          }
+          existingQuestions = record['questions'] ?? [];
+        } else if (record is List) {
+          existingQuestions = record;
         }
-      } else if (data.containsKey('questions') && data['questions'] != null) {
-        final dynamic questionsData = data['questions'];
-        if (questionsData is List) {
-          questions = questionsData;
-        }
-      } else {
-        return false;
+      } else if (data['questions'] != null) {
+        existingQuestions = data['questions'];
       }
 
       int questionIndex = -1;
-      for (int i = 0; i < questions.length; i++) {
-        final Map<String, dynamic> q = questions[i] as Map<String, dynamic>;
+      for (int i = 0; i < existingQuestions.length; i++) {
+        final q = existingQuestions[i] as Map<String, dynamic>;
         if (q['id'] == questionId) {
           questionIndex = i;
           break;
@@ -511,14 +486,14 @@ class QuestionsService {
       if (questionIndex == -1) return false;
 
       final Map<String, dynamic> question =
-          questions[questionIndex] as Map<String, dynamic>;
+          existingQuestions[questionIndex] as Map<String, dynamic>;
       final String questionOwnerId = question['userId']?.toString() ?? '';
 
       final List<dynamic> replies =
           (question['replies'] as List<dynamic>?) ?? [];
       int replyIndex = -1;
       for (int i = 0; i < replies.length; i++) {
-        final Map<String, dynamic> r = replies[i] as Map<String, dynamic>;
+        final r = replies[i] as Map<String, dynamic>;
         if (r['id'] == replyId) {
           replyIndex = i;
           break;
@@ -541,7 +516,7 @@ class QuestionsService {
       question['replies'] = replies;
 
       final Map<String, dynamic> newData = {
-        'questions': questions,
+        'questions': existingQuestions,
       };
 
       final putResponse = await http
@@ -556,6 +531,7 @@ class QuestionsService {
           .timeout(const Duration(seconds: 20));
 
       if (putResponse.statusCode == 200 || putResponse.statusCode == 201) {
+        await clearCache();
         final updatedQuestions = await _fetchFromApi();
         await _cacheQuestions(updatedQuestions);
         print('✅ تم حذف الرد');
