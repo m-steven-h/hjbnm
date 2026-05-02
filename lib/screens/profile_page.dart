@@ -38,11 +38,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _requestRequiredPermissions() async {
     if (kIsWeb) return;
-    
+
     try {
       if (Platform.isAndroid) {
         final androidInfo = await _deviceInfo.androidInfo;
-        
+
         if (androidInfo.version.sdkInt >= 33) {
           // Android 13+ يطلب فقط إذن الصور
           final status = await Permission.photos.request();
@@ -105,7 +105,7 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       if (Platform.isAndroid) {
         final androidInfo = await _deviceInfo.androidInfo;
-        
+
         if (androidInfo.version.sdkInt >= 33) {
           // Android 13+
           final status = await Permission.photos.request();
@@ -137,7 +137,7 @@ class _ProfilePageState extends State<ProfilePage> {
         }
         return false;
       }
-      
+
       return true;
     } catch (e) {
       print('Error requesting gallery permission: $e');
@@ -165,7 +165,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   void _showPermissionDialog(String permissionName) {
     if (!mounted) return;
-    
+
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -192,13 +192,13 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       // طلب الإذن المناسب حسب المصدر
       bool hasPermission = false;
-      
+
       if (source == ImageSource.camera) {
         hasPermission = await _requestCameraPermission();
       } else {
         hasPermission = await _requestGalleryPermission();
       }
-      
+
       if (!hasPermission) {
         if (mounted) {
           _showErrorSnackBar(context, 'لا توجد أذونات كافية');
@@ -276,7 +276,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library, color: Color(0xFF4ADE80)),
+                leading:
+                    const Icon(Icons.photo_library, color: Color(0xFF4ADE80)),
                 title: Text(
                   'اختيار من المعرض',
                   style: GoogleFonts.cairo(color: provider.textColor),
