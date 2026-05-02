@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import '../providers/theme_provider.dart';
 import '../secrets.dart';
 
@@ -26,11 +27,50 @@ class _ProfilePageState extends State<ProfilePage> {
   String _userId = '';
   String? _profileImage;
   final ImagePicker _picker = ImagePicker();
+  final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _requestRequiredPermissions();
+  }
+
+  Future<void> _requestRequiredPermissions() async {
+    if (kIsWeb) return;
+    
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await _deviceInfo.androidInfo;
+        
+        if (androidInfo.version.sdkInt >= 33) {
+          // Android 13+ يطلب فقط إذن الصور
+          final status = await Permission.photos.request();
+          if (status.isGranted) {
+            print('✅ Photos permission granted');
+          } else {
+            print('❌ Photos permission denied');
+          }
+        } else {
+          // Android 12 وأقل يطلب إذن التخزين
+          final status = await Permission.storage.request();
+          if (status.isGranted) {
+            print('✅ Storage permission granted');
+          } else {
+            print('❌ Storage permission denied');
+          }
+        }
+      } else if (Platform.isIOS) {
+        final status = await Permission.photos.request();
+        if (status.isGranted) {
+          print('✅ Photos permission granted');
+        } else {
+          print('❌ Photos permission denied');
+        }
+      }
+    } catch (e) {
+      print('Error requesting permissions: $e');
+    }
   }
 
   Future<void> _loadUserData() async {
@@ -59,31 +99,78 @@ class _ProfilePageState extends State<ProfilePage> {
     await _loadUserData();
   }
 
-  Future<bool> _requestPermission(Permission permission) async {
+  Future<bool> _requestGalleryPermission() async {
     if (kIsWeb) return true;
 
-    final status = await permission.request();
-    if (status.isGranted) {
-      return true;
-    } else if (status.isDenied) {
-      final result = await permission.request();
-      return result.isGranted;
-    } else if (status.isPermanentlyDenied) {
-      if (mounted) {
-        _showPermissionDialog();
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await _deviceInfo.androidInfo;
+        
+        if (androidInfo.version.sdkInt >= 33) {
+          // Android 13+
+          final status = await Permission.photos.request();
+          if (status.isGranted) {
+            return true;
+          } else if (status.isPermanentlyDenied) {
+            _showPermissionDialog('الوصول إلى الصور');
+            return false;
+          }
+          return false;
+        } else {
+          // Android 12 وأقل
+          final status = await Permission.storage.request();
+          if (status.isGranted) {
+            return true;
+          } else if (status.isPermanentlyDenied) {
+            _showPermissionDialog('الوصول إلى التخزين');
+            return false;
+          }
+          return false;
+        }
+      } else if (Platform.isIOS) {
+        final status = await Permission.photos.request();
+        if (status.isGranted) {
+          return true;
+        } else if (status.isPermanentlyDenied) {
+          _showPermissionDialog('الوصول إلى الصور');
+          return false;
+        }
+        return false;
       }
+      
+      return true;
+    } catch (e) {
+      print('Error requesting gallery permission: $e');
       return false;
     }
-    return false;
   }
 
-  void _showPermissionDialog() {
+  Future<bool> _requestCameraPermission() async {
+    if (kIsWeb) return true;
+
+    try {
+      final status = await Permission.camera.request();
+      if (status.isGranted) {
+        return true;
+      } else if (status.isPermanentlyDenied) {
+        _showPermissionDialog('الكاميرا');
+        return false;
+      }
+      return false;
+    } catch (e) {
+      print('Error requesting camera permission: $e');
+      return false;
+    }
+  }
+
+  void _showPermissionDialog(String permissionName) {
+    if (!mounted) return;
+    
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('الأذونات مطلوبة'),
-        content:
-            const Text('يرجى منح أذونات الكاميرا والصور من إعدادات الجهاز'),
+        content: Text('يرجى منح إذن $permissionName من إعدادات الجهاز'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
@@ -103,23 +190,23 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      if (!kIsWeb) {
-        Permission permission;
-        if (source == ImageSource.camera) {
-          permission = Permission.camera;
-        } else {
-          permission = Permission.photos;
+      // طلب الإذن المناسب حسب المصدر
+      bool hasPermission = false;
+      
+      if (source == ImageSource.camera) {
+        hasPermission = await _requestCameraPermission();
+      } else {
+        hasPermission = await _requestGalleryPermission();
+      }
+      
+      if (!hasPermission) {
+        if (mounted) {
+          _showErrorSnackBar(context, 'لا توجد أذونات كافية');
         }
-
-        final hasPermission = await _requestPermission(permission);
-        if (!hasPermission) {
-          if (mounted) {
-            _showErrorSnackBar(context, 'لا توجد أذونات كافية');
-          }
-          return;
-        }
+        return;
       }
 
+      // اختيار الصورة
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
         maxWidth: 1024,
@@ -150,7 +237,7 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       print('General Error: $e');
       if (mounted) {
-        _showErrorSnackBar(context, 'حدث خطأ أثناء اختيار الصورة: $e');
+        _showErrorSnackBar(context, 'حدث خطأ أثناء اختيار الصورة');
       }
     }
   }
@@ -189,8 +276,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 },
               ),
               ListTile(
-                leading:
-                    const Icon(Icons.photo_library, color: Color(0xFF4ADE80)),
+                leading: const Icon(Icons.photo_library, color: Color(0xFF4ADE80)),
                 title: Text(
                   'اختيار من المعرض',
                   style: GoogleFonts.cairo(color: provider.textColor),
@@ -247,95 +333,56 @@ class _ProfilePageState extends State<ProfilePage> {
             height: 100,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.person,
-                  size: 50,
-                  color: Colors.white.withOpacity(0.8),
-                ),
-              );
+              return _buildDefaultAvatar();
             },
           ),
         );
       } catch (e) {
-        return Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.person,
-            size: 50,
-            color: Colors.white.withOpacity(0.8),
-          ),
-        );
+        return _buildDefaultAvatar();
       }
     } else {
       try {
         final file = File(_profileImage!);
-        if (file.existsSync()) {
-          return ClipOval(
-            child: Image.file(
-              file,
-              width: 100,
-              height: 100,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
+        return FutureBuilder<bool>(
+          future: file.exists(),
+          builder: (context, snapshot) {
+            if (snapshot.hasData && snapshot.data == true) {
+              return ClipOval(
+                child: Image.file(
+                  file,
                   width: 100,
                   height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.person,
-                    size: 50,
-                    color: Colors.white.withOpacity(0.8),
-                  ),
-                );
-              },
-            ),
-          );
-        } else {
-          return Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.person,
-              size: 50,
-              color: Colors.white.withOpacity(0.8),
-            ),
-          );
-        }
-      } catch (e) {
-        return Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.person,
-            size: 50,
-            color: Colors.white.withOpacity(0.8),
-          ),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return _buildDefaultAvatar();
+                  },
+                ),
+              );
+            } else {
+              return _buildDefaultAvatar();
+            }
+          },
         );
+      } catch (e) {
+        return _buildDefaultAvatar();
       }
     }
+  }
+
+  Widget _buildDefaultAvatar() {
+    return Container(
+      width: 100,
+      height: 100,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        Icons.person,
+        size: 50,
+        color: Colors.white.withOpacity(0.8),
+      ),
+    );
   }
 
   Future<bool> _showSecretCodeDialog(BuildContext context) async {
@@ -727,15 +774,13 @@ class _ProfilePageState extends State<ProfilePage> {
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
             colors: isFounder
-                ? [const Color(0xFF4ADE80), const Color(0xFF4ADE80)]
+                ? [const Color(0xFF4ADE80), const Color(0xFF22C55E)]
                 : [const Color(0xFF4ADE80), const Color(0xFF22C55E)],
           ),
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: isFounder
-                  ? const Color(0xFF4ADE80).withOpacity(0.3)
-                  : const Color(0xFF4ADE80).withOpacity(0.3),
+              color: const Color(0xFF4ADE80).withOpacity(0.3),
               blurRadius: 15,
               offset: const Offset(0, 5),
             ),
